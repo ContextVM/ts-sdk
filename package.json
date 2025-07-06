@@ -1,0 +1,87 @@
+{
+  "name": "@ctxvm/sdk",
+  "version": "0.1.0",
+  "description": "ctxvm SDK for JavaScript/TypeScript",
+  "license": "MIT",
+  "author": "Your Name/Organization (https://example.com)",
+  "homepage": "https://ctxvm.com",
+  "bugs": "https://github.com/ctxvm/some-repo/issues",
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ctxvm/some-repo.git"
+  },
+  "engines": {
+    "bun": ">=1.2.0"
+  },
+  "keywords": [
+    "contextvendingmachine",
+    "ctxvm",
+    "nostr",
+    "modelcontextprotocol",
+    "mcp"
+  ],
+  "exports": {
+    ".": {
+      "import": "./dist/esm/index.js",
+      "require": "./dist/cjs/index.js"
+    },
+    "./core": {
+      "import": "./dist/esm/core/index.js",
+      "require": "./dist/cjs/core/index.js"
+    },
+    "./core/*": {
+      "import": "./dist/esm/core/*.js",
+      "require": "./dist/cjs/core/*.js"
+    },
+    "./relay": {
+      "import": "./dist/esm/relay/index.js",
+      "require": "./dist/cjs/relay/index.js"
+    },
+    "./relay/*": {
+      "import": "./dist/esm/relay/*.js",
+      "require": "./dist/cjs/relay/*.js"
+    },
+    "./signer": {
+      "import": "./dist/esm/signer/index.js",
+      "require": "./dist/cjs/signer/index.js"
+    },
+    "./signer/*": {
+      "import": "./dist/esm/signer/*.js",
+      "require": "./dist/cjs/signer/*.js"
+    }
+  },
+  "typesVersions": {
+    "*": {
+      "*": [
+        "./dist/esm/*"
+      ]
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "bun run build:esm && bun run build:cjs",
+    "build:esm": "mkdir -p dist/esm && echo '{\"type\": \"module\"}' > dist/esm/package.json && bun tsc -p tsconfig.prod.json",
+    "build:cjs": "mkdir -p dist/cjs && echo '{\"type\": \"commonjs\"}' > dist/cjs/package.json && bun tsc -p tsconfig.cjs.json",
+    "lint": "eslint src/",
+    "test": "bun tests",
+    "fmt": "bun prettier --write ."
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.8.0",
+    "@types/bun": "latest",
+    "eslint": "^9.8.0",
+    "eslint-config-prettier": "^10.1.5",
+    "prettier": "^3.6.2",
+    "typescript-eslint": "^8.0.0"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.15.0",
+    "nostr-tools": "^2.15.0"
+  }
+}
