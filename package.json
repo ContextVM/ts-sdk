@@ -1,15 +1,14 @@
 {
   "name": "@ctxvm/sdk",
   "version": "0.1.0",
-  "description": "ctxvm SDK for JavaScript/TypeScript",
+  "description": "CtxVM SDK for JavaScript/TypeScript",
   "license": "MIT",
-  "author": "Your Name/Organization (https://example.com)",
-  "homepage": "https://ctxvm.com",
-  "bugs": "https://github.com/ctxvm/some-repo/issues",
+  "author": "ContextVM",
+  "bugs": "https://github.com/ContextVM/ts-sdk/issues",
   "type": "module",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/ctxvm/some-repo.git"
+    "url": "git+https://github.com/ContextVM/ts-sdk.git"
   },
   "engines": {
     "bun": ">=1.2.0"

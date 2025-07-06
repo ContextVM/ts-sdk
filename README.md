@@ -1,15 +1,3 @@
-# ctxvm
+# ctxvm-sdk
 
-To install dependencies:
-
-```bash
-bun install
-```
-
-To run:
-
-```bash
-bun run index.ts
-```
-
-This project was created using `bun init` in bun v1.2.17. [Bun](https://bun.sh) is a fast all-in-one JavaScript runtime.
+`@ctxvm/sdk` is a TypeScript SDK designed to implement the `ctxvm` protocol, providing modular access to core functionalities, relay interactions, and signing operations.
