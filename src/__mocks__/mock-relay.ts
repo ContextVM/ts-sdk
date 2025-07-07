@@ -1,6 +1,7 @@
 import { serve, type ServerWebSocket } from 'bun';
 import { matchFilters, matchFilter } from 'nostr-tools';
 import type { Event, Filter } from 'nostr-tools';
+import { getResponse, MOCK_SERVER_PUBLIC_KEY } from './mock-responses.js';
 
 // Message Types
 type NostrClientMessage =
@@ -138,7 +139,6 @@ class Instance {
     for (const filter of filters) {
       let limitCount = filter.limit;
       if (limitCount !== undefined && limitCount <= 0) {
-        console.log('miss events due to limit=0 on subscription:', subId);
         continue;
       }
       for (const event of events) {
@@ -150,8 +150,6 @@ class Instance {
             if (limitCount !== undefined) {
               limitCount--;
             }
-          } else {
-            console.log('miss', subId, event);
           }
         }
       }
@@ -169,14 +167,60 @@ class Instance {
       .concat(event)
       .sort((a, b) => (a.created_at < b.created_at ? 1 : -1));
 
-    console.log('EVENT', event.id);
+    console.log('EVENT:', event);
 
-    this.send(['OK', event.id, true, '']);
+    // Check if the event is a CTXVM request and needs a mock response
+    try {
+      const content = JSON.parse(event.content);
+      if (content.method) {
+        // Extract serverPubkey and serverIdentifier from the request tags
+        const targetServerPubkey = event.tags.find(
+          (tag) => tag[0] === 'p',
+        )?.[1];
+        const targetServerIdentifier = event.tags.find(
+          (tag) => tag[0] === 's',
+        )?.[1];
 
+        if (
+          targetServerPubkey &&
+          targetServerPubkey !== MOCK_SERVER_PUBLIC_KEY
+        ) {
+          console.log('Mismatched target server public key, not responding.');
+          return; // Do not respond
+        }
+        if (
+          targetServerIdentifier &&
+          targetServerIdentifier !== 'mock-server-identifier'
+        ) {
+          console.log('Mismatched target server identifier, not responding.');
+          return; // Do not respond
+        }
+
+        const responseEvent = getResponse(event);
+
+        if (responseEvent) {
+          // Find the subscription that matches this response
+          for (const [subId, { instance, filters }] of subs.entries()) {
+            if (matchFilters(filters, responseEvent)) {
+              instance.send(['EVENT', subId, responseEvent]);
+              console.log(
+                'Sent mock response for',
+                content.method,
+                responseEvent,
+              );
+            }
+          }
+        }
+        this.send(['OK', event.id, true, '']);
+      }
+    } catch (error) {
+      console.error('Error handling incoming Nostr event:', error);
+    }
+
+    // Forward the original event to any matching subscriptions
     for (const [subId, { instance, filters }] of subs.entries()) {
       if (matchFilters(filters, event)) {
         console.log('match', subId, event.id);
-
         instance.send(['EVENT', subId, event]);
       }
     }
@@ -195,7 +239,7 @@ const server = serve({
       return new Response(
         JSON.stringify({
           name: 'Bucket',
-          description: 'An ephemeral dev relay',
+          description: 'Just a dev relay',
         }),
         {
           headers: {

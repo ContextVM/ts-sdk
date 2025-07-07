@@ -10,27 +10,27 @@ export const CTXVM_MESSAGES_KIND = 25910;
  * Encrypted CTXVM messages using NIP-59 Gift Wrap.
  * @see https://github.com/nostr-protocol/nips/blob/master/59.md
  */
-export const CTXVM_GIFT_WRAP_KIND = 1059;
+export const GIFT_WRAP_KIND = 1059;
 
 /**
  * Addressable event for server announcements.
  */
-export const CTXVM_SERVER_ANNOUNCEMENT_KIND = 31316;
+export const SERVER_ANNOUNCEMENT_KIND = 31316;
 
 /**
  * Addressable event for listing available tools.
  */
-export const CTXVM_TOOLS_LIST_KIND = 31317;
+export const TOOLS_LIST_KIND = 31317;
 
 /**
  * Addressable event for listing available resources.
  */
-export const CTXVM_RESOURCES_LIST_KIND = 31318;
+export const RESOURCES_LIST_KIND = 31318;
 
 /**
  * Addressable event for listing available prompts.
  */
-export const CTXVM_PROMPTS_LIST_KIND = 31319;
+export const PROMPTS_LIST_KIND = 31319;
 
 /**
  * CTXVM-specific Nostr event tags.
@@ -60,4 +60,4 @@ export const NOSTR_TAGS = {
    * Capability tag for tools, resources, and prompts to provide pricing metadata.
    */
   CAPABILITY: 'cap',
-};
+} as const;
