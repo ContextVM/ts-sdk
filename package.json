@@ -20,6 +20,10 @@
     "modelcontextprotocol",
     "mcp"
   ],
+  "bin": {
+    "mcp-nostr-gateway": "./dist/esm/cli/mcp-nostr-gateway.js",
+    "mcp-nostr-proxy": "./dist/esm/cli/mcp-nostr-proxy.js"
+  },
   "exports": {
     ".": {
       "import": "./dist/esm/index.js",
@@ -48,6 +52,14 @@
     "./signer/*": {
       "import": "./dist/esm/signer/*.js",
       "require": "./dist/cjs/signer/*.js"
+    },
+    "./gateway": {
+      "import": "./dist/esm/gateway/index.js",
+      "require": "./dist/cjs/gateway/index.js"
+    },
+    "./proxy": {
+      "import": "./dist/esm/proxy/index.js",
+      "require": "./dist/cjs/proxy/index.js"
     }
   },
   "typesVersions": {

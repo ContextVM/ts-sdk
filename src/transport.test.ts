@@ -16,13 +16,12 @@ import {
   mockedReadResourceResult,
   mockedCallToolResult,
 } from './__mocks__/mock-responses.js';
+import { TEST_PRIVATE_KEY } from './__mocks__/fixtures.js';
 
 describe('NostrTransport Integration Test', () => {
   let relayProcess: Subprocess;
   const relayPort = 7778;
   const relayUrl = `ws://localhost:${relayPort}`;
-  const clientPrivateKeyHex =
-    'b994738f7c9b3bcfcdba63886c7f3f57ce1e1b51dde3040c6fc073fd069b96ce';
 
   beforeAll(async () => {
     relayProcess = Bun.spawn(['bun', 'src/__mocks__/mock-relay.ts'], {
@@ -38,7 +37,7 @@ describe('NostrTransport Integration Test', () => {
   });
 
   test('should connect and handle a simple request', async () => {
-    const signer = new PrivateKeySigner(clientPrivateKeyHex);
+    const signer = new PrivateKeySigner(TEST_PRIVATE_KEY);
     const relayPool = new SimpleRelayPool([relayUrl]);
 
     const transport = new NostrTransport({
@@ -58,7 +57,7 @@ describe('NostrTransport Integration Test', () => {
   }, 10000);
 
   test('should not connect if serverPubkey is incorrect (expect timeout)', async () => {
-    const signer = new PrivateKeySigner(clientPrivateKeyHex);
+    const signer = new PrivateKeySigner(TEST_PRIVATE_KEY);
     const relayPool = new SimpleRelayPool([relayUrl]);
 
     const incorrectServerPubkey =
@@ -81,7 +80,7 @@ describe('NostrTransport Integration Test', () => {
   }, 10000);
 
   test('should not connect if serverIdentifier is incorrect (expect timeout)', async () => {
-    const signer = new PrivateKeySigner(clientPrivateKeyHex);
+    const signer = new PrivateKeySigner(TEST_PRIVATE_KEY);
     const relayPool = new SimpleRelayPool([relayUrl]);
 
     const transport = new NostrTransport({
@@ -101,7 +100,7 @@ describe('NostrTransport Integration Test', () => {
   }, 10000);
 
   test('should list prompts', async () => {
-    const signer = new PrivateKeySigner(clientPrivateKeyHex);
+    const signer = new PrivateKeySigner(TEST_PRIVATE_KEY);
     const relayPool = new SimpleRelayPool([relayUrl]);
 
     const transport = new NostrTransport({
@@ -123,7 +122,7 @@ describe('NostrTransport Integration Test', () => {
   }, 10000);
 
   test('should get a specific prompt', async () => {
-    const signer = new PrivateKeySigner(clientPrivateKeyHex);
+    const signer = new PrivateKeySigner(TEST_PRIVATE_KEY);
     const relayPool = new SimpleRelayPool([relayUrl]);
 
     const transport = new NostrTransport({
@@ -150,7 +149,7 @@ describe('NostrTransport Integration Test', () => {
   }, 10000);
 
   test('should list resources', async () => {
-    const signer = new PrivateKeySigner(clientPrivateKeyHex);
+    const signer = new PrivateKeySigner(TEST_PRIVATE_KEY);
     const relayPool = new SimpleRelayPool([relayUrl]);
 
     const transport = new NostrTransport({
@@ -183,7 +182,7 @@ describe('NostrTransport Integration Test', () => {
   }, 10000);
 
   test('should read a specific resource', async () => {
-    const signer = new PrivateKeySigner(clientPrivateKeyHex);
+    const signer = new PrivateKeySigner(TEST_PRIVATE_KEY);
     const relayPool = new SimpleRelayPool([relayUrl]);
 
     const transport = new NostrTransport({
@@ -207,7 +206,7 @@ describe('NostrTransport Integration Test', () => {
   }, 10000);
 
   test('should list tools', async () => {
-    const signer = new PrivateKeySigner(clientPrivateKeyHex);
+    const signer = new PrivateKeySigner(TEST_PRIVATE_KEY);
     const relayPool = new SimpleRelayPool([relayUrl]);
 
     const transport = new NostrTransport({
@@ -229,7 +228,7 @@ describe('NostrTransport Integration Test', () => {
   }, 10000);
 
   test('should call a tool', async () => {
-    const signer = new PrivateKeySigner(clientPrivateKeyHex);
+    const signer = new PrivateKeySigner(TEST_PRIVATE_KEY);
     const relayPool = new SimpleRelayPool([relayUrl]);
 
     const transport = new NostrTransport({

@@ -85,6 +85,15 @@ export class NostrTransport implements Transport {
    * @param message The JSON-RPC request or response to send.
    */
   public async send(message: JSONRPCMessage): Promise<void> {
+    await this.sendWithEventId(message);
+  }
+
+  /**
+   * Sends a JSON-RPC message over the Nostr transport and returns the event ID.
+   * @param message The JSON-RPC request or response to send.
+   * @returns The ID of the published Nostr event.
+   */
+  public async sendWithEventId(message: JSONRPCMessage): Promise<string> {
     const pubkey = await this.signer.getPublicKey();
     const tags: string[][] = [[NOSTR_TAGS.PUBKEY, this.serverPubkey]];
     if (this.serverIdentifier) {
@@ -101,5 +110,6 @@ export class NostrTransport implements Transport {
     const finalEvent: NostrEvent = await this.signer.signEvent(unsignedEvent);
 
     await this.relayHandler.publish(finalEvent);
+    return finalEvent.id;
   }
 }
