@@ -1,7 +1,6 @@
 import { serve, type ServerWebSocket } from 'bun';
 import { matchFilters, matchFilter } from 'nostr-tools';
 import type { Event, Filter } from 'nostr-tools';
-import { getResponse, MOCK_SERVER_PUBLIC_KEY } from './mock-responses.js';
 
 // Message Types
 type NostrClientMessage =
@@ -19,6 +18,7 @@ type NostrRelayMessage =
 let connCount = 0;
 let events: Event[] = [];
 const subs = new Map<string, { instance: Instance; filters: Filter[] }>();
+const connections = new Map<ServerWebSocket, Instance>();
 
 let lastPurge = Date.now();
 
@@ -39,6 +39,7 @@ if (process.env.PURGE_INTERVAL) {
 class Instance {
   private _socket: ServerWebSocket;
   private _subs = new Set<string>();
+  private _connectionId: string;
 
   /**
    * Creates an instance of the relay connection.
@@ -46,6 +47,7 @@ class Instance {
    */
   constructor(socket: ServerWebSocket) {
     this._socket = socket;
+    this._connectionId = Math.random().toString(36).substring(2, 15);
   }
 
   /**
@@ -65,8 +67,9 @@ class Instance {
    * @param filters The filters for the subscription.
    */
   addSub(subId: string, filters: Filter[]): void {
-    subs.set(subId, { instance: this, filters });
-    this._subs.add(subId);
+    const uniqueSubId = `${this._connectionId}:${subId}`;
+    subs.set(uniqueSubId, { instance: this, filters });
+    this._subs.add(uniqueSubId);
   }
 
   /**
@@ -74,8 +77,9 @@ class Instance {
    * @param subId The subscription ID.
    */
   removeSub(subId: string): void {
-    subs.delete(subId);
-    this._subs.delete(subId);
+    const uniqueSubId = `${this._connectionId}:${subId}`;
+    subs.delete(uniqueSubId);
+    this._subs.delete(uniqueSubId);
   }
 
   /**
@@ -169,59 +173,16 @@ class Instance {
 
     console.log('EVENT:', event);
 
-    // Check if the event is a CTXVM request and needs a mock response
-    try {
-      const content = JSON.parse(event.content);
-      if (content.method) {
-        // Extract serverPubkey and serverIdentifier from the request tags
-        const targetServerPubkey = event.tags.find(
-          (tag) => tag[0] === 'p',
-        )?.[1];
-        const targetServerIdentifier = event.tags.find(
-          (tag) => tag[0] === 's',
-        )?.[1];
-
-        if (
-          targetServerPubkey &&
-          targetServerPubkey !== MOCK_SERVER_PUBLIC_KEY
-        ) {
-          console.log('Mismatched target server public key, not responding.');
-          return; // Do not respond
-        }
-        if (
-          targetServerIdentifier &&
-          targetServerIdentifier !== 'mock-server-identifier'
-        ) {
-          console.log('Mismatched target server identifier, not responding.');
-          return; // Do not respond
-        }
-
-        const responseEvent = getResponse(event);
-
-        if (responseEvent) {
-          // Find the subscription that matches this response
-          for (const [subId, { instance, filters }] of subs.entries()) {
-            if (matchFilters(filters, responseEvent)) {
-              instance.send(['EVENT', subId, responseEvent]);
-              console.log(
-                'Sent mock response for',
-                content.method,
-                responseEvent,
-              );
-            }
-          }
-        }
-        this.send(['OK', event.id, true, '']);
-      }
-    } catch (error) {
-      console.error('Error handling incoming Nostr event:', error);
-    }
+    this.send(['OK', event.id, true, '']);
 
     // Forward the original event to any matching subscriptions
-    for (const [subId, { instance, filters }] of subs.entries()) {
+    for (const [uniqueSubId, { instance, filters }] of subs.entries()) {
       if (matchFilters(filters, event)) {
-        console.log('match', subId, event.id);
-        instance.send(['EVENT', subId, event]);
+        const originalSubId = uniqueSubId.includes(':')
+          ? uniqueSubId.split(':').slice(1).join(':')
+          : uniqueSubId;
+        console.log('match', originalSubId, event.id);
+        instance.send(['EVENT', originalSubId, event]);
       }
     }
   }
@@ -231,6 +192,12 @@ const server = serve({
   port: process.env.PORT || 3000,
   fetch(req, server) {
     const url = new URL(req.url);
+
+    // Handle cache clearing for testing
+    if (url.pathname === '/clear-cache' && req.method === 'POST') {
+      events = [];
+      return new Response('Cache cleared', { status: 200 });
+    }
 
     if (
       url.pathname === '/' &&
@@ -268,6 +235,7 @@ const server = serve({
       });
 
       const relay = new Instance(ws);
+      connections.set(ws, relay);
 
       if (process.env.PURGE_INTERVAL) {
         const now = Date.now();
@@ -283,12 +251,17 @@ const server = serve({
       }
     },
     message(ws: ServerWebSocket, message: string) {
-      const relay = new Instance(ws);
-      relay.handle(message);
+      const relay = connections.get(ws);
+      if (relay) {
+        relay.handle(message);
+      }
     },
     close(ws: ServerWebSocket) {
-      const relay = new Instance(ws);
-      relay.cleanup();
+      const relay = connections.get(ws);
+      if (relay) {
+        relay.cleanup();
+        connections.delete(ws);
+      }
 
       connCount -= 1;
       console.log('Closing connection', {

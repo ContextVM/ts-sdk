@@ -17,10 +17,14 @@ describe('RelayPool Integration', () => {
 
   beforeAll(async () => {
     relayProcess = Bun.spawn(['bun', 'src/__mocks__/mock-relay.ts'], {
-      env: { ...process.env, PORT: `${relayPort}` },
+      env: {
+        ...process.env,
+        PORT: `${relayPort}`,
+        DISABLE_MOCK_RESPONSES: 'true',
+      },
     });
     // Wait for the relay to start
-    await new Promise((resolve) => setTimeout(resolve, 500));
+    await Bun.sleep(100);
   });
 
   afterAll(() => {

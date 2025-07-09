@@ -13,7 +13,7 @@ import { finalizeEvent } from 'nostr-tools';
 import { hexToBytes } from 'nostr-tools/utils';
 
 // A dummy private key for the mock server to sign events.
-const MOCK_SERVER_PRIVATE_KEY_HEX =
+export const MOCK_SERVER_PRIVATE_KEY_HEX =
   'dd6db7f15d05ac8014f2c809be0a5123627917c961c2412117f0c8b66d7797ec';
 export const MOCK_SERVER_PUBLIC_KEY =
   'b2a35f0fe5f64e0764c131bd58c987ff87837a9a1dcab7f922ec2edeae3d33de';
