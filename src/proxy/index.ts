@@ -4,7 +4,10 @@ import {
   JSONRPCRequest,
   JSONRPCResponse,
 } from '@modelcontextprotocol/sdk/types.js';
-import { NostrTransport, NostrTransportOptions } from '../transport.js';
+import {
+  NostrTransport,
+  NostrTransportOptions,
+} from '../transport/nostr-client-transport.js';
 
 /**
  * Options for configuring the NostrMCPProxy.

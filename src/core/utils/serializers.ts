@@ -30,8 +30,15 @@ export function mcpToNostrEvent(
  *
  * @param event The Nostr event to deserialize.
  * @returns An MCP request or response object.
+ * @throws Error if the event content is not valid JSON
  */
 export function nostrEventToMcpMessage(event: NostrEvent): JSONRPCMessage {
-  const content = JSON.parse(event.content);
-  return content;
+  try {
+    const content = JSON.parse(event.content);
+    return content;
+  } catch (error) {
+    throw new Error(
+      `Invalid JSON in Nostr event content: ${error instanceof Error ? error.message : 'Unknown error'}`,
+    );
+  }
 }

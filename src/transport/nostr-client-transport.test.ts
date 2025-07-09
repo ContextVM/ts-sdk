@@ -1,9 +1,9 @@
 import { afterAll, beforeAll, describe, test, expect } from 'bun:test';
 import type { Subprocess } from 'bun';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
-import { PrivateKeySigner } from './signer/private-key-signer.js';
-import { SimpleRelayPool } from './relay/simple-relay-pool.js';
-import { NostrTransport } from './transport.js';
+import { PrivateKeySigner } from '../signer/private-key-signer.js';
+import { SimpleRelayPool } from '../relay/simple-relay-pool.js';
+import { NostrTransport } from './nostr-client-transport.js';
 import {
   MOCK_SERVER_IDENTIFIER,
   MOCK_SERVER_PUBLIC_KEY,
@@ -15,8 +15,8 @@ import {
   mockedGetPromptResult,
   mockedReadResourceResult,
   mockedCallToolResult,
-} from './__mocks__/mock-responses.js';
-import { TEST_PRIVATE_KEY } from './__mocks__/fixtures.js';
+} from '../__mocks__/mock-responses.js';
+import { TEST_PRIVATE_KEY } from '../__mocks__/fixtures.js';
 
 describe('NostrTransport Integration Test', () => {
   let relayProcess: Subprocess;
