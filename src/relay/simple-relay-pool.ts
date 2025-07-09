@@ -31,7 +31,7 @@ export class SimpleRelayPool implements RelayHandler {
       relayUrls = this.relayUrls;
     }
     this.pool.close(relayUrls);
-    await Bun.sleep(250);
+    await Bun.sleep(100);
   }
 
   async publish(event: NostrEvent): Promise<void> {

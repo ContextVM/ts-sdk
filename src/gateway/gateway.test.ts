@@ -37,7 +37,7 @@ describe('NostrMCPGateway End-to-End Test', () => {
     });
 
     // Wait for relay to start
-    await Bun.sleep(200);
+    await Bun.sleep(100);
 
     // Create the gateway with the mock server transport
     const mcpServerTransport = new StdioClientTransport({
@@ -62,7 +62,7 @@ describe('NostrMCPGateway End-to-End Test', () => {
     console.log('Gateway started, waiting for readiness...');
 
     // Wait for gateway to be ready
-    await Bun.sleep(200);
+    await Bun.sleep(100);
     console.log('Gateway should be ready now');
     console.log('Gateway public key:', gatewayPublicKey);
     console.log(

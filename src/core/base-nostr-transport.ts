@@ -126,6 +126,7 @@ export abstract class BaseNostrTransport {
       {
         '#p': [targetPubkey],
         kinds: [CTXVM_MESSAGES_KIND, GIFT_WRAP_KIND],
+        since: Math.floor(Date.now() / 1000),
         ...additionalFilters,
       },
     ];

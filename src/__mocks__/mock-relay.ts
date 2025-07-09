@@ -1,11 +1,6 @@
 import { serve, type ServerWebSocket } from 'bun';
 import { matchFilters, matchFilter } from 'nostr-tools';
 import type { Event, Filter } from 'nostr-tools';
-import { getResponse, MOCK_SERVER_PUBLIC_KEY } from './mock-responses.js';
-import { CTXVM_MESSAGES_KIND } from '../core/constants.js';
-
-// Flag to disable mock responses and act as a normal relay
-const DISABLE_MOCK_RESPONSES = process.env.DISABLE_MOCK_RESPONSES === 'true';
 
 // Message Types
 type NostrClientMessage =
@@ -178,61 +173,7 @@ class Instance {
 
     console.log('EVENT:', event);
 
-    // Check if the event is a CTXVM request and needs a mock response
-    if (event.kind === CTXVM_MESSAGES_KIND && !DISABLE_MOCK_RESPONSES) {
-      try {
-        const content = JSON.parse(event.content);
-        if (content.method) {
-          // Extract serverPubkey and serverIdentifier from the request tags
-          const targetServerPubkey = event.tags.find(
-            (tag) => tag[0] === 'p',
-          )?.[1];
-          const targetServerIdentifier = event.tags.find(
-            (tag) => tag[0] === 's',
-          )?.[1];
-
-          if (
-            targetServerPubkey &&
-            targetServerPubkey !== MOCK_SERVER_PUBLIC_KEY
-          ) {
-            console.log('Mismatched target server public key, not responding.');
-            return; // Do not respond
-          }
-          if (
-            targetServerIdentifier &&
-            targetServerIdentifier !== 'mock-server-identifier'
-          ) {
-            console.log('Mismatched target server identifier, not responding.');
-            return; // Do not respond
-          }
-
-          const responseEvent = getResponse(event);
-
-          if (responseEvent) {
-            // Find the subscription that matches this response
-            for (const [uniqueSubId, { instance, filters }] of subs.entries()) {
-              if (matchFilters(filters, responseEvent)) {
-                const originalSubId = uniqueSubId.includes(':')
-                  ? uniqueSubId.split(':').slice(1).join(':')
-                  : uniqueSubId;
-                instance.send(['EVENT', originalSubId, responseEvent]);
-                console.log(
-                  'Sent mock response for',
-                  content.method,
-                  responseEvent,
-                );
-              }
-            }
-          }
-          this.send(['OK', event.id, true, '']);
-        }
-      } catch (error) {
-        console.error('Error handling incoming Nostr event:', error);
-      }
-    } else {
-      // When mock responses are disabled, just send OK for all events
-      this.send(['OK', event.id, true, '']);
-    }
+    this.send(['OK', event.id, true, '']);
 
     // Forward the original event to any matching subscriptions
     for (const [uniqueSubId, { instance, filters }] of subs.entries()) {
@@ -251,6 +192,12 @@ const server = serve({
   port: process.env.PORT || 3000,
   fetch(req, server) {
     const url = new URL(req.url);
+
+    // Handle cache clearing for testing
+    if (url.pathname === '/clear-cache' && req.method === 'POST') {
+      events = [];
+      return new Response('Cache cleared', { status: 200 });
+    }
 
     if (
       url.pathname === '/' &&

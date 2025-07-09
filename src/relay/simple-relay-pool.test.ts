@@ -24,7 +24,7 @@ describe('RelayPool Integration', () => {
       },
     });
     // Wait for the relay to start
-    await Bun.sleep(200);
+    await Bun.sleep(100);
   });
 
   afterAll(() => {
