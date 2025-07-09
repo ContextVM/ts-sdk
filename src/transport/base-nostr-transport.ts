@@ -1,15 +1,13 @@
 import type { JSONRPCMessage } from '@modelcontextprotocol/sdk/types.js';
 import type { Event as NostrEvent, Filter } from 'nostr-tools';
-import { NostrSigner, RelayHandler } from './interfaces.js';
+import { NostrSigner, RelayHandler } from '../core/interfaces.js';
 import {
   CTXVM_MESSAGES_KIND,
   GIFT_WRAP_KIND,
-  NOSTR_TAGS,
-} from './constants.js';
-import {
   mcpToNostrEvent,
+  NOSTR_TAGS,
   nostrEventToMcpMessage,
-} from './utils/serializers.js';
+} from '../core/index.js';
 
 /**
  * Base options for configuring Nostr-based transports.

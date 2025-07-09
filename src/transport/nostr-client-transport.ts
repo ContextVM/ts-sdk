@@ -3,7 +3,9 @@ import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js';
 import type { Event as NostrEvent } from 'nostr-tools';
 import { NostrSigner, RelayHandler } from '../core/interfaces.js';
 import { CTXVM_MESSAGES_KIND } from '../core/constants.js';
-import { BaseNostrTransport } from '../core/base-nostr-transport.js';
+import { BaseNostrTransport } from './base-nostr-transport.js';
+
+// TODO: Check `e` tag of the response from the server
 
 /**
  * Options for configuring the NostrTransport.

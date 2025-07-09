@@ -8,8 +8,10 @@ import type { Event as NostrEvent } from 'nostr-tools';
 import {
   BaseNostrTransport,
   BaseNostrTransportOptions,
-} from '../core/base-nostr-transport.js';
+} from './base-nostr-transport.js';
 import { CTXVM_MESSAGES_KIND } from '../core/constants.js';
+
+// TODO: Add serverId to the configuration to check for targeted requests
 
 /**
  * Options for configuring the NostrServerTransport.

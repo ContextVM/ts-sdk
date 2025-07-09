@@ -1,9 +1,5 @@
 import { Transport } from '@modelcontextprotocol/sdk/shared/transport.js';
-import {
-  JSONRPCMessage,
-  JSONRPCRequest,
-  JSONRPCResponse,
-} from '@modelcontextprotocol/sdk/types.js';
+import { JSONRPCMessage } from '@modelcontextprotocol/sdk/types.js';
 import {
   NostrTransport,
   NostrTransportOptions,
@@ -33,7 +29,6 @@ export interface NostrMCPProxyOptions {
 export class NostrMCPProxy {
   private mcpHostTransport: Transport;
   private nostrTransport: NostrTransport;
-  private pendingRequests = new Map<string | number, string | number>(); // nostrEventId -> originalMcpId
 
   constructor(options: NostrMCPProxyOptions) {
     this.mcpHostTransport = options.mcpHostTransport;
@@ -81,7 +76,6 @@ export class NostrMCPProxy {
   public async stop(): Promise<void> {
     await this.mcpHostTransport.close();
     await this.nostrTransport.close();
-    this.pendingRequests.clear();
     console.log('NostrMCPProxy stopped.');
   }
 
@@ -93,34 +87,7 @@ export class NostrMCPProxy {
    * @returns Promise that resolves when the message is processed
    */
   public async handleMessageFromHost(message: JSONRPCMessage): Promise<void> {
-    const request = message as JSONRPCRequest;
-    if (request.id) {
-      try {
-        // Send the message and get the Nostr event ID
-        const nostrEventId = await this.nostrTransport.sendWithEventId(message);
-
-        // Store the original MCP ID keyed by the Nostr event ID
-        this.pendingRequests.set(nostrEventId, request.id);
-      } catch (error) {
-        console.error('Error sending message to Nostr:', error);
-        // Send error response back to host
-        if (request.id) {
-          const errorResponse: JSONRPCMessage = {
-            jsonrpc: '2.0',
-            id: request.id,
-            error: {
-              code: -32603,
-              message:
-                'Internal error: Failed to send message to Nostr network',
-            },
-          };
-          this.mcpHostTransport.send(errorResponse);
-        }
-      }
-    } else {
-      // For notifications (no ID), just send directly
-      await this.nostrTransport.send(message);
-    }
+    await this.nostrTransport.send(message);
   }
 
   /**
@@ -131,33 +98,6 @@ export class NostrMCPProxy {
    * @param message - The JSON-RPC message from the Nostr network
    */
   private handleMessageFromNostr(message: JSONRPCMessage): void {
-    const response = message as JSONRPCResponse;
-
-    if (response.id) {
-      // Check if this is a response to a request we forwarded
-      if (this.pendingRequests.has(response.id)) {
-        const originalMcpId = this.pendingRequests.get(response.id);
-
-        // Send the response back to the MCP host with the original ID
-        if (originalMcpId !== undefined) {
-          this.mcpHostTransport.send({ ...response, id: originalMcpId });
-
-          // Clean up the mapping
-          this.pendingRequests.delete(response.id);
-        } else {
-          // This shouldn't happen, but handle gracefully
-          console.warn(
-            'Found response ID in pending requests but no original MCP ID',
-          );
-          this.mcpHostTransport.send(message);
-        }
-      } else {
-        // Unknown response ID, forward as-is (might be a notification)
-        this.mcpHostTransport.send(message);
-      }
-    } else {
-      // This is a notification from the server (no ID)
-      this.mcpHostTransport.send(message);
-    }
+    this.mcpHostTransport.send(message);
   }
 }
