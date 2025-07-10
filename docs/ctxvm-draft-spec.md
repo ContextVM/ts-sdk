@@ -158,9 +158,9 @@ CTXVM provides two methods of server discovery, the main differences between the
 
 ### Discovery via Server Announcements (Public Servers)
 
-Providers announce their servers and capabilities by publishing events with kinds 31316 (server), 31317 (tools/list), 31318 (resources/list), and 31319 (prompts/list).
+// TODO: Improve this section now that the initialization round is managed by clients. This public announcements could allow to just get the connection parameters (public key and serverId) out of a nip19 identifier, like `naddr...`
 
-After a client discovers a server through these announcements, it can immediately begin making requests to the server without requiring an explicit initialization step.
+Providers announce their servers and capabilities by publishing events with kinds 31316 (server), 31317 (tools/list), 31318 (resources/list), and 31319 (prompts/list).
 
 **Note:** The `content` field of CTXVM events contains stringified MCP messages. The examples below present the `content` as a JSON object for readability; it must be stringified before inclusion in a Nostr event.
 
@@ -244,6 +244,8 @@ For servers that are not publicly announced, clients MUST use the MCP initializa
 {
   "kind": 25910,
   "content": {
+    "jsonrpc": "2.0",
+    "id": 0,
     "method": "initialize",
     "params": {
       "protocolVersion": "2025-07-02",
@@ -279,6 +281,8 @@ For servers that are not publicly announced, clients MUST use the MCP initializa
   "kind": 25910,
   "pubkey": "<provider-pubkey>",
   "content": {
+    "jsonrpc": "2.0",
+    "id": 0,
     "result": {
       "protocolVersion": "2025-07-02",
       "capabilities": {
@@ -324,6 +328,7 @@ After receiving the server initialization response, the client MUST send an init
   "kind": 25910,
   "pubkey": "<client-pubkey>",
   "content": {
+    "jsonrpc": "2.0",
     "method": "notifications/initialized"
   },
   "tags": [
@@ -356,6 +361,8 @@ All list operations follow the same structure described by MCP, with the specifi
   "pubkey": "<client-pubkey>",
   "id": "<request-event-id>",
   "content": {
+    "jsonrpc": "2.0",
+    "id": 1,
     "method": "<capability>/list", // tools/list, resources/list, or prompts/list
     "params": {
       "cursor": "optional-cursor-value"
@@ -375,6 +382,8 @@ All list operations follow the same structure described by MCP, with the specifi
   "kind": 25910,
   "pubkey": "<provider-pubkey>",
   "content": {
+    "jsonrpc": "2.0",
+    "id": 1,
     "result": {
       "<items>": [
         // "tools", "resources", or "prompts" based on capability
@@ -399,6 +408,8 @@ All list operations follow the same structure described by MCP, with the specifi
   "id": "<request-event-id>",
   "pubkey": "<client-pubkey>",
   "content": {
+    "jsonrpc": "2.0",
+    "id": 2,
     "method": "tools/call",
     "params": {
       "name": "get_weather",
@@ -421,6 +432,8 @@ All list operations follow the same structure described by MCP, with the specifi
   "kind": 25910,
   "pubkey": "<provider-pubkey>",
   "content": {
+    "jsonrpc": "2.0",
+    "id": 2,
     "result": {
       "content": [
         {
@@ -501,7 +514,7 @@ From capability list events:
   },
   "tags": [
     ["e", "<request-event-id>"], // Required: Reference to the request event
-    ["cap", "<capability-identifier>", "<price>", "<currency-unit>"] // Optional: Pricing metadata
+    ["cap", "get_weather", "100", "sats"] // Optional: Pricing metadata
   ]
 }
 ```
@@ -542,7 +555,6 @@ Encryption support is advertised through the `support_encryption` tag in server 
     /* server details */
   },
   "tags": [
-    ["d", "<server-identifier>"],
     ["support_encryption"] // Presence alone indicates encryption support
     // ... other tags
   ]
@@ -556,81 +568,28 @@ Clients can discover encryption support by:
 
 ### Message Encryption Flow
 
-When encryption is enabled, CTXVM messages follow the NIP-17 pattern with NIP-59 gift wrapping:
+When encryption is enabled, CTXVM messages follow a simplified NIP-17 pattern with no 'rumor' with NIP-59 gift wrapping:
 
-#### 1. Content Preparation
+#### 1. Request Preparation
 
-The original CTXVM message content is prepared as usual:
-
-```json
-{
-  "method": "tools/call",
-  "params": {
-    "name": "get_weather",
-    "arguments": { "location": "New York" }
-  }
-}
-```
-
-#### 2. Seal Creation (NIP-17)
-
-The CTXVM content is encrypted and sealed as an unsigned kind 14 event:
-
-```json
-{
-  "id": "<usual hash>",
-  "pubkey": "<sender-pubkey>",
-  "created_at": "<timestamp>",
-  "kind": 14,
-  "tags": [
-    ["p", "<receiver-pubkey>"],
-    ["s", "<server-identifier>"] // Optional: Server identifier when targeting specific server
-  ],
-  "content": "<original-CTXVM-content-as-plaintext>"
-}
-```
-
-This unsigned event is then sealed (kind 13) with NIP-44 encryption:
-
-```json
-{
-  "id": "<seal-hash>",
-  "pubkey": "<sender-pubkey>",
-  "created_at": "<randomized-timestamp>",
-  "kind": 13,
-  "tags": [],
-  "content": "<nip44-encrypted-kind-14>",
-  "sig": "<sender-signature>"
-}
-```
-
-#### 3. Gift Wrapping (NIP-59)
-
-The seal is gift-wrapped (kind 1059) with a random key:
-
-```json
-{
-  "id": "<gift-wrap-hash>",
-  "pubkey": "<random-pubkey>",
-  "created_at": "<randomized-timestamp>",
-  "kind": 1059,
-  "tags": [["p", "<receiver-pubkey>"]],
-  "content": "<nip44-encrypted-seal>",
-  "sig": "<random-key-signature>"
-}
-```
-
-### Encrypted Event Structure
-
-When encryption is active, CTXVM events are transformed as follows:
-
-#### Original CTXVM Request
+The request is prepared as usual:
 
 ```json
 {
   "kind": 25910,
+  "id": "<request-event-id>",
   "pubkey": "<client-pubkey>",
-  "content": "{\"method\":\"tools/call\",\"params\":{\"name\":\"get_weather\",\"arguments\":{\"location\":\"New York\"}}}",
+  "content": {
+    "jsonrpc": "2.0",
+    "id": 2,
+    "method": "tools/call",
+    "params": {
+      "name": "get_weather",
+      "arguments": {
+        "location": "New York"
+      }
+    }
+  },
   "tags": [
     ["p", "<provider-pubkey>"],
     ["s", "<server-identifier>"]
@@ -638,31 +597,57 @@ When encryption is active, CTXVM events are transformed as follows:
 }
 ```
 
-#### Encrypted CTXVM Request
+#### 2. Gift Wrapping (NIP-59)
+
+The request is then converted in json string, and gift-wrapped (kind 1059) with a random key, following nip-44 encryption:
 
 ```json
 {
-  "kind": 1059,
-  "pubkey": "<random-ephemeral-pubkey>",
+  "id": "<gift-wrap-hash>",
+  "pubkey": "<random-pubkey>",
   "created_at": "<randomized-timestamp>",
-  "content": "<nip44-encrypted-seal-containing-CTXVM-message>",
-  "tags": [["p", "<provider-pubkey>"]],
-  "sig": "<ephemeral-key-signature>"
+  "kind": 1059,
+  "tags": [["p", "<server-pubkey>"]],
+  "content": "<nip44-encrypted-request>",
+  "sig": "<random-key-signature>"
 }
 ```
 
-The inner content (after decryption) maintains the original CTXVM structure with all tags and metadata intact.
-
 #### Encrypted Response Structure
 
-Server responses follow the same pattern:
+Server responses follow the same pattern
+
+Requests are prepared as usual:
+
+```json
+{
+  "kind": 25910,
+  "pubkey": "<provider-pubkey>",
+  "content": {
+    "jsonrpc": "2.0",
+    "id": 2,
+    "result": {
+      "content": [
+        {
+          "type": "text",
+          "text": "Current weather in New York:\nTemperature: 72°F\nConditions: Partly cloudy"
+        }
+      ],
+      "isError": false
+    }
+  },
+  "tags": [["e", "<request-event-id>"]]
+}
+```
+
+The response is then converted in json string, and gift-wrapped (kind 1059) with a random key, following nip-44 encryption:
 
 ```json
 {
   "kind": 1059,
   "pubkey": "<random-ephemeral-pubkey>",
   "created_at": "<randomized-timestamp>",
-  "content": "<nip44-encrypted-seal-containing-CTXVM-response>",
+  "content": "<nip44-encrypted-containing-CTXVM-response>",
   "tags": [["p", "<client-pubkey>"]],
   "sig": "<ephemeral-key-signature>"
 }
@@ -670,7 +655,7 @@ Server responses follow the same pattern:
 
 The decrypted inner content contains the standard CTXVM response format.
 
-**Note:** The response should use the id of original request as `e` tag, not the sealed event `id`.
+**Note:** The response should use the id of original request as `e` tag, not the gift-wrapped event `id`.
 
 ## Notifications
 
@@ -691,9 +676,7 @@ Notifications are constructed according to the MCP notification template. The di
     }
   },
   "tags": [
-    ["p", "<recipient-pubkey>"], // Required: Target public key (recipient)
-    ["s", "<server-identifier>"], // Optional: Server identifier (for Client to Server notifications)
-    ["e", "<request-event-id>"] // Optional: Reference to the request (for progress/cancel/payment_required)
+    ["p", "<recipient-pubkey>"] // Required: Target public key (recipient)
   ]
 }
 ```
@@ -862,4 +845,4 @@ Unlike direct MCP connections, Nostr's pub/sub model requires special handling f
    - When the client explicitly sends a cancellation request
    - When the connection times out due to network issues
 
-4. **Message Correlation**: All responses and notifications MUST include appropriate `e` tags to correlate with the original request, ensuring proper message routing in the decentralized environment.
+4. **Message Correlation**: All responses and notifications MUST include appropriate `e`, and `p` tags to correlate with the original request, ensuring proper message routing in the decentralized environment.

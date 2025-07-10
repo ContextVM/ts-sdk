@@ -10,7 +10,7 @@ To enable an existing MCP Host (e.g., a local CLI client) to interact with a rem
   - An external application (e.g., `modelcontextprotocol/sdk` client using `StdioClientTransport`) that expects to connect to a local MCP server. It's unaware of Nostr.
 
 - **`NostrMCPProxy` (New Component)**:
-  - It acts as an MCP Client (using an internal `NostrTransport` instance) to the `NostrMCPGateway`.
+  - It acts as an MCP Client (using an internal `NostrClientTransport` instance) to the `NostrMCPGateway`.
   - **Responsibility**: Bidirectionally proxy MCP messages between the `MCP Host` (via stdio) and the `NostrMCPGateway` (via Nostr). This includes serialization/deserialization of MCP messages into Nostr events and managing Nostr tags.
   - **Discovery Role**: Manages server discovery (public announcements) and client initialization (for private servers) on behalf of the `MCP Host`.
 
@@ -35,7 +35,7 @@ The communication between the `MCP Host` and the `Original MCP Server` will flow
     - The `NostrMCPProxy` receives the MCP message.
     - It converts this MCP message into a Nostr event (`kind: 25910`), embedding the MCP message content and relevant Nostr tags (e.g., `p` tag targeting the `NostrMCPGateway`'s public key, `s` tag for the gateway's identifier).
     - It signs the Nostr event using its internal `NostrSigner`.
-    - It publishes this signed Nostr event to the `Nostr Relay` via its internal `NostrTransport`.
+    - It publishes this signed Nostr event to the `Nostr Relay` via its internal `NostrClientTransport`.
 
 3.  **Nostr Relay forwards event**: The `Nostr Relay` receives the event and, based on its subscription filters, forwards it to the `NostrMCPGateway`.
 
@@ -93,7 +93,7 @@ graph TD
     MCPHost -- JSON-RPC over Stdio --> LocalStdioTransport
     LocalStdioTransport <--> NostrMCPProxyCLI
 
-    NostrMCPProxyCLI -- Uses NostrTransport (Client) --> NostrTransportProxy
+    NostrMCPProxyCLI -- Uses NostrClientTransport (Client) --> NostrTransportProxy
     NostrTransportProxy <--> ProxySigner
     NostrTransportProxy -- Publishes/Subscribes Unencrypted Nostr Events (Kind 25910 & 3131x) --> NostrRelay
 
