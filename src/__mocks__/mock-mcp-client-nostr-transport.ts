@@ -19,3 +19,11 @@ const transport = new NostrClientTransport({
 
 await client.connect(transport);
 await client.listTools();
+await Bun.sleep(1000);
+await client.callTool({
+  name: 'add',
+  arguments: {
+    a: 1,
+    b: 2,
+  },
+});

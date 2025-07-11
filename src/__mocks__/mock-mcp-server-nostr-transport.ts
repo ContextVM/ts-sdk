@@ -55,4 +55,5 @@ const transport = new NostrServerTransport({
 });
 
 await server.connect(transport);
-await Bun.sleep(100);
+await Bun.sleep(10000);
+server.sendToolListChanged();

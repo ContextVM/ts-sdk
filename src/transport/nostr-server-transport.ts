@@ -1,7 +1,9 @@
 import {
   InitializeRequest,
   InitializeResultSchema,
+  isJSONRPCRequest,
   isJSONRPCResponse,
+  isJSONRPCNotification,
   JSONRPCError,
   LATEST_PROTOCOL_VERSION,
   ListPromptsResultSchema,
@@ -11,6 +13,7 @@ import {
   type JSONRPCMessage,
   type JSONRPCRequest,
   type JSONRPCResponse,
+  isJSONRPCError,
 } from '@modelcontextprotocol/sdk/types.js';
 import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js';
 import type { Event as NostrEvent } from 'nostr-tools';
@@ -29,7 +32,12 @@ import {
   TOOLS_LIST_KIND,
 } from '../core/constants.js';
 
-// TODO: Improve notification handling, right now if the jsonrpc message doesnt have an id (notifications doesnt have id) it wont be registered or sent
+/**
+ * Options for configuring the NostrServerTransport.
+ */
+export interface NostrServerTransportOptions extends BaseNostrTransportOptions {
+  serverInfo?: ServerInfo;
+}
 
 /**
  * Information about a server.
@@ -43,18 +51,12 @@ export interface ServerInfo {
 }
 
 /**
- * Options for configuring the NostrServerTransport.
+ * Information about a connected client session with integrated request tracking.
  */
-export interface NostrServerTransportOptions extends BaseNostrTransportOptions {
-  serverInfo?: ServerInfo;
-}
-
-/**
- * Information about a pending request that needs correlation for response routing.
- */
-interface PendingRequest {
-  requesterPubkey: string;
-  originalMcpRequestId: string | number;
+interface ClientSession {
+  isInitialized: boolean;
+  lastActivity: number;
+  pendingRequests: Map<string, string | number>;
 }
 
 /**
@@ -67,13 +69,11 @@ export class NostrServerTransport
   extends BaseNostrTransport
   implements Transport
 {
-  // Public event handlers required by the Transport interface.
   public onmessage?: (message: JSONRPCMessage) => void;
   public onclose?: () => void;
   public onerror?: (error: Error) => void;
 
-  // Storage for pending requests with full correlation information
-  private readonly pendingRequests = new Map<string | number, PendingRequest>();
+  private readonly clientSessions = new Map<string, ClientSession>();
   private readonly serverInfo?: ServerInfo;
 
   constructor(options: NostrServerTransportOptions) {
@@ -95,22 +95,8 @@ export class NostrServerTransport
       try {
         const mcpMessage = this.convertNostrEventToMcpMessage(event);
 
-        // Store correlation information for requests (not notifications)
-        const request = mcpMessage as JSONRPCRequest;
-        if (request.id !== undefined && request.id !== null) {
-          // Store the original request ID for later restoration
-          const originalRequestId = request.id;
-
-          // Use the unique Nostr event ID as the MCP request ID to avoid collisions
-          request.id = event.id;
-
-          this.pendingRequests.set(event.id, {
-            requesterPubkey: event.pubkey,
-            originalMcpRequestId: originalRequestId,
-          });
-        } else {
-          // This is a notification (no ID)
-        }
+        // Message handling with unified session management
+        this.handleIncomingMessage(event.pubkey, event.id, mcpMessage);
 
         // Call standard Transport handler
         this.onmessage?.(mcpMessage);
@@ -125,7 +111,7 @@ export class NostrServerTransport
     });
 
     if (this.serverInfo?.isPublicServer) {
-      await this.getAnnouncementData();
+      this.getAnnouncementData();
     }
   }
 
@@ -134,65 +120,30 @@ export class NostrServerTransport
    */
   public async close(): Promise<void> {
     await this.disconnect();
-    // Clear pending requests
-    this.pendingRequests.clear();
+    this.clientSessions.clear();
     this.onclose?.();
   }
 
   /**
-   * Sends a JSON-RPC message over the Nostr transport.
-   * It automatically correlates with the original request.
+   * Sends JSON-RPC messages over the Nostr transport.
    * @param message The JSON-RPC message to send.
    */
   public async send(message: JSONRPCMessage): Promise<void> {
-    const response = message as JSONRPCResponse | JSONRPCError;
-    // If this is a response (has an ID), look up the original request
-    if (response.id !== undefined && response.id !== null) {
-      const nostrEventId = response.id as string; // This is the Nostr event ID used as the key
-      const pendingRequest = this.pendingRequests.get(nostrEventId);
-
-      if (!pendingRequest) {
-        if (response.id === 'announcement') {
-          if (isJSONRPCResponse(response)) {
-            this.announcer(response);
-          }
-          return;
-        } else {
-          this.onerror?.(
-            new Error(
-              `No pending request found for response ID: ${response.id}`,
-            ),
-          );
-          return;
-        }
-      }
-
-      // Restore the original request ID in the response
-      response.id = pendingRequest.originalMcpRequestId;
-
-      // Send the response back to the original requester
-      const tags = this.createResponseTags(
-        pendingRequest.requesterPubkey,
-        nostrEventId,
-      );
-
-      await this.sendMcpMessage(response, CTXVM_MESSAGES_KIND, tags);
-
-      // Clean up the pending request (use the Nostr event ID as the key)
-      this.pendingRequests.delete(nostrEventId);
+    // Message type detection and routing
+    if (isJSONRPCResponse(message) || isJSONRPCError(message)) {
+      await this.handleResponse(message);
+    } else if (isJSONRPCNotification(message)) {
+      await this.handleNotification(message);
     } else {
-      // This is a notification (no ID)
-      throw new Error('Cannot send notification without a target recipient');
+      this.onerror?.(new Error('Unknown message type in send()'));
     }
+    this.cleanupInactiveSessions();
   }
 
   /**
    * Initiates the process of fetching announcement data from the server's internal logic.
-   * @returns A Promise that resolves when the announcement requests have been dispatched.
    */
-  private async getAnnouncementData(): Promise<void> {
-    console.log('Getting announcement data...');
-
+  private getAnnouncementData(): void {
     const initializeParams: InitializeRequest['params'] = {
       protocolVersion: LATEST_PROTOCOL_VERSION,
       capabilities: {},
@@ -218,9 +169,8 @@ export class NostrServerTransport
    * Handles the JSON-RPC responses for public server announcements and publishes
    * them as Nostr events to the configured relays.
    * @param message The JSON-RPC response containing the announcement data.
-   * @returns A Promise that resolves when the announcement event has been sent.
    */
-  private async announcer(message: JSONRPCResponse): Promise<void> {
+  private announcer(message: JSONRPCResponse): void {
     if (InitializeResultSchema.safeParse(message.result).success) {
       this.sendMcpMessage(
         message.result as JSONRPCMessage,
@@ -257,5 +207,198 @@ export class NostrServerTransport
     } else if (ListPromptsResultSchema.safeParse(message.result).success) {
       this.sendMcpMessage(message.result as JSONRPCMessage, PROMPTS_LIST_KIND);
     }
+  }
+
+  /**
+   * Handles incoming messages with unified session and request management.
+   * @param clientPubkey The public key of the client.
+   * @param eventId The Nostr event ID.
+   * @param message The MCP message received from the client.
+   */
+  private handleIncomingMessage(
+    clientPubkey: string,
+    eventId: string,
+    message: JSONRPCMessage,
+  ): void {
+    const now = Date.now();
+    const session = this.getOrCreateClientSession(clientPubkey, now);
+
+    // Update session activity
+    session.lastActivity = now;
+    // Handle different message types intelligently
+    if (isJSONRPCRequest(message)) {
+      this.handleIncomingRequest(session, eventId, message);
+    } else if (isJSONRPCNotification(message)) {
+      this.handleIncomingNotification(session, message);
+    }
+  }
+
+  /**
+   * Gets or creates a client session with proper initialization.
+   * @param clientPubkey The client's public key.
+   * @param now Current timestamp.
+   * @returns The client session.
+   */
+  private getOrCreateClientSession(
+    clientPubkey: string,
+    now: number,
+  ): ClientSession {
+    const session = this.clientSessions.get(clientPubkey);
+    if (!session) {
+      const newSession: ClientSession = {
+        isInitialized: false,
+        lastActivity: now,
+        pendingRequests: new Map(),
+      };
+      this.clientSessions.set(clientPubkey, newSession);
+      return newSession;
+    }
+    return session;
+  }
+
+  /**
+   * Handles incoming requests with correlation tracking.
+   * @param session The client session.
+   * @param eventId The Nostr event ID.
+   * @param request The request message.
+   */
+  private handleIncomingRequest(
+    session: ClientSession,
+    eventId: string,
+    request: JSONRPCRequest,
+  ): void {
+    // Store the original request ID for later restoration
+    const originalRequestId = request.id;
+    // Use the unique Nostr event ID as the MCP request ID to avoid collisions
+    request.id = eventId;
+    // Store in client session
+    session.pendingRequests.set(eventId, originalRequestId);
+  }
+
+  /**
+   * Handles incoming notifications.
+   * @param session The client session.
+   * @param notification The notification message.
+   */
+  private handleIncomingNotification(
+    session: ClientSession,
+    notification: JSONRPCMessage,
+  ): void {
+    if (
+      isJSONRPCNotification(notification) &&
+      notification.method === 'notifications/initialized'
+    ) {
+      session.isInitialized = true;
+    }
+  }
+
+  /**
+   * Handles response messages by finding the original request and routing back to client.
+   * @param response The JSON-RPC response or error to send.
+   */
+  private async handleResponse(
+    response: JSONRPCResponse | JSONRPCError,
+  ): Promise<void> {
+    // Handle special announcement responses
+    if (response.id === 'announcement') {
+      if (isJSONRPCResponse(response)) {
+        this.announcer(response);
+      }
+      return;
+    }
+
+    // Find the client session with this pending request
+    const nostrEventId = response.id as string;
+    let targetClientPubkey: string | undefined;
+    let originalRequestId: string | number | undefined;
+
+    for (const [clientPubkey, session] of this.clientSessions.entries()) {
+      const originalId = session.pendingRequests.get(nostrEventId);
+      if (originalId !== undefined) {
+        targetClientPubkey = clientPubkey;
+        originalRequestId = originalId;
+        break;
+      }
+    }
+
+    if (!targetClientPubkey || originalRequestId === undefined) {
+      this.onerror?.(
+        new Error(`No pending request found for response ID: ${response.id}`),
+      );
+      return;
+    }
+
+    // Restore the original request ID in the response
+    response.id = originalRequestId;
+
+    // Send the response back to the original requester
+    const tags = this.createResponseTags(targetClientPubkey, nostrEventId);
+    await this.sendMcpMessage(response, CTXVM_MESSAGES_KIND, tags);
+
+    // Clean up the pending request
+    this.clientSessions
+      .get(targetClientPubkey)
+      ?.pendingRequests.delete(nostrEventId);
+  }
+
+  /**
+   * Handles notification messages with routing.
+   * @param notification The JSON-RPC notification to send.
+   */
+  private async handleNotification(
+    notification: JSONRPCMessage,
+  ): Promise<void> {
+    const promises: Promise<void>[] = [];
+
+    for (const [clientPubkey, session] of this.clientSessions.entries()) {
+      if (session.isInitialized) {
+        promises.push(this.sendNotification(clientPubkey, notification));
+      }
+    }
+
+    await Promise.all(promises);
+  }
+
+  /**
+   * Sends a notification to a specific client by their public key.
+   * @param clientPubkey The public key of the target client.
+   * @param notification The notification message to send.
+   * @returns Promise that resolves when the notification is sent.
+   */
+  public async sendNotification(
+    clientPubkey: string,
+    notification: JSONRPCMessage,
+  ): Promise<void> {
+    const session = this.clientSessions.get(clientPubkey);
+    if (!session) {
+      throw new Error(`No active session found for client: ${clientPubkey}`);
+    }
+
+    // Create tags for targeting the specific client
+    const tags = this.createRecipientTags(clientPubkey);
+
+    await this.sendMcpMessage(notification, CTXVM_MESSAGES_KIND, tags);
+  }
+
+  /**
+   * Cleans up inactive client sessions based on a timeout.
+   * @param timeoutMs Timeout in milliseconds for considering a session inactive (default: 5 minutes).
+   * @returns The number of sessions that were cleaned up.
+   */
+  public cleanupInactiveSessions(timeoutMs: number = 300000): number {
+    const now = Date.now();
+    const keysToDelete: string[] = [];
+
+    for (const [clientPubkey, session] of this.clientSessions.entries()) {
+      if (now - session.lastActivity > timeoutMs) {
+        keysToDelete.push(clientPubkey);
+      }
+    }
+
+    for (const key of keysToDelete) {
+      this.clientSessions.delete(key);
+    }
+
+    return keysToDelete.length;
   }
 }
