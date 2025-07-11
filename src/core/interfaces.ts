@@ -1,3 +1,10 @@
+import {
+  InitializeRequest,
+  ListPromptsRequest,
+  ListResourcesRequest,
+  ListResourceTemplatesRequest,
+  ListToolsRequest,
+} from '@modelcontextprotocol/sdk/types.js';
 import type { Filter, NostrEvent } from 'nostr-tools';
 
 /**
@@ -22,4 +29,12 @@ export interface RelayHandler {
     onEose?: () => void,
   ): Promise<void>;
   unsubscribe(): void;
+}
+
+export interface AnnouncementMethods {
+  server: InitializeRequest['method'];
+  tools: ListToolsRequest['method'];
+  resources: ListResourcesRequest['method'];
+  resourceTemplates: ListResourceTemplatesRequest['method'];
+  prompts: ListPromptsRequest['method'];
 }

@@ -7,7 +7,7 @@ import type { Event as NostrEvent } from 'nostr-tools';
 import { NostrSigner, RelayHandler } from '../core/interfaces.js';
 import { CTXVM_MESSAGES_KIND } from '../core/constants.js';
 import { BaseNostrTransport } from './base-nostr-transport.js';
-import { getNostrEventTag } from '../core/utils/serializers.js'; // Import the new utility
+import { getNostrEventTag } from '../core/utils/serializers.js';
 
 /**
  * Options for configuring the NostrClientTransport.
@@ -115,10 +115,7 @@ export class NostrClientTransport
    * @returns The ID of the published Nostr event.
    */
   public async sendWithEventId(message: JSONRPCMessage): Promise<string> {
-    const tags = this.createRecipientTags(
-      this.serverPubkey,
-      this.serverIdentifier,
-    );
+    const tags = this.createRecipientTags(this.serverPubkey);
     return await this.sendMcpMessage(message, CTXVM_MESSAGES_KIND, tags);
   }
 }

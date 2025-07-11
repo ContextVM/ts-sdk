@@ -1,4 +1,13 @@
 import {
+  InitializeRequest,
+  InitializeResultSchema,
+  isJSONRPCResponse,
+  JSONRPCError,
+  LATEST_PROTOCOL_VERSION,
+  ListPromptsResultSchema,
+  ListResourcesResultSchema,
+  ListResourceTemplatesResultSchema,
+  ListToolsResultSchema,
   type JSONRPCMessage,
   type JSONRPCRequest,
   type JSONRPCResponse,
@@ -9,14 +18,36 @@ import {
   BaseNostrTransport,
   BaseNostrTransportOptions,
 } from './base-nostr-transport.js';
-import { CTXVM_MESSAGES_KIND } from '../core/constants.js';
+import {
+  announcementMethods,
+  CTXVM_MESSAGES_KIND,
+  NOSTR_TAGS,
+  PROMPTS_LIST_KIND,
+  RESOURCES_LIST_KIND,
+  RESOURCETEMPLATES_LIST_KIND,
+  SERVER_ANNOUNCEMENT_KIND,
+  TOOLS_LIST_KIND,
+} from '../core/constants.js';
 
-// TODO: Add serverId to the configuration to check for targeted requests
+// TODO: Improve notification handling, right now if the jsonrpc message doesnt have an id (notifications doesnt have id) it wont be registered or sent
+
+/**
+ * Information about a server.
+ */
+export interface ServerInfo {
+  name?: string;
+  picture?: string;
+  isPublicServer?: boolean;
+  website?: string;
+  supportEncryption?: boolean;
+}
 
 /**
  * Options for configuring the NostrServerTransport.
  */
-export type NostrServerTransportOptions = BaseNostrTransportOptions;
+export interface NostrServerTransportOptions extends BaseNostrTransportOptions {
+  serverInfo?: ServerInfo;
+}
 
 /**
  * Information about a pending request that needs correlation for response routing.
@@ -43,9 +74,11 @@ export class NostrServerTransport
 
   // Storage for pending requests with full correlation information
   private readonly pendingRequests = new Map<string | number, PendingRequest>();
+  private readonly serverInfo?: ServerInfo;
 
   constructor(options: NostrServerTransportOptions) {
     super(options);
+    this.serverInfo = options.serverInfo;
   }
 
   /**
@@ -55,7 +88,6 @@ export class NostrServerTransport
   public async start(): Promise<void> {
     await this.connect();
     const pubkey = await this.getPublicKey();
-
     // Subscribe to events targeting this server's public key
     const filters = this.createSubscriptionFilters(pubkey);
 
@@ -76,6 +108,8 @@ export class NostrServerTransport
             requesterPubkey: event.pubkey,
             originalMcpRequestId: originalRequestId,
           });
+        } else {
+          // This is a notification (no ID)
         }
 
         // Call standard Transport handler
@@ -89,6 +123,10 @@ export class NostrServerTransport
         );
       }
     });
+
+    if (this.serverInfo?.isPublicServer) {
+      await this.getAnnouncementData();
+    }
   }
 
   /**
@@ -103,22 +141,30 @@ export class NostrServerTransport
 
   /**
    * Sends a JSON-RPC message over the Nostr transport.
-   * This method handles both standalone usage and gateway usage.
-   * For responses, it automatically correlates with the original request.
+   * It automatically correlates with the original request.
    * @param message The JSON-RPC message to send.
    */
   public async send(message: JSONRPCMessage): Promise<void> {
-    const response = message as JSONRPCResponse;
-
+    const response = message as JSONRPCResponse | JSONRPCError;
     // If this is a response (has an ID), look up the original request
     if (response.id !== undefined && response.id !== null) {
       const nostrEventId = response.id as string; // This is the Nostr event ID used as the key
       const pendingRequest = this.pendingRequests.get(nostrEventId);
 
       if (!pendingRequest) {
-        throw new Error(
-          `No pending request found for response ID: ${response.id}`,
-        );
+        if (response.id === 'announcement') {
+          if (isJSONRPCResponse(response)) {
+            this.announcer(response);
+          }
+          return;
+        } else {
+          this.onerror?.(
+            new Error(
+              `No pending request found for response ID: ${response.id}`,
+            ),
+          );
+          return;
+        }
       }
 
       // Restore the original request ID in the response
@@ -129,21 +175,87 @@ export class NostrServerTransport
         pendingRequest.requesterPubkey,
         nostrEventId,
       );
-      await this.sendMcpMessage(message, CTXVM_MESSAGES_KIND, tags);
+
+      await this.sendMcpMessage(response, CTXVM_MESSAGES_KIND, tags);
 
       // Clean up the pending request (use the Nostr event ID as the key)
       this.pendingRequests.delete(nostrEventId);
     } else {
-      // This is a notification (no ID), cannot be sent without a target
+      // This is a notification (no ID)
       throw new Error('Cannot send notification without a target recipient');
     }
   }
 
   /**
-   * Gets the number of pending requests.
-   * @returns The number of requests waiting for responses.
+   * Initiates the process of fetching announcement data from the server's internal logic.
+   * @returns A Promise that resolves when the announcement requests have been dispatched.
    */
-  public getPendingRequestCount(): number {
-    return this.pendingRequests.size;
+  private async getAnnouncementData(): Promise<void> {
+    console.log('Getting announcement data...');
+
+    const initializeParams: InitializeRequest['params'] = {
+      protocolVersion: LATEST_PROTOCOL_VERSION,
+      capabilities: {},
+      clientInfo: {
+        name: 'DummyClient',
+        version: '1.0.0',
+      },
+    };
+
+    for (const [key, methodValue] of Object.entries(announcementMethods)) {
+      const message: JSONRPCMessage = {
+        jsonrpc: '2.0',
+        id: 'announcement',
+        method: methodValue,
+        params: key === 'server' ? initializeParams : {},
+      };
+
+      this.onmessage?.(message);
+    }
+  }
+
+  /**
+   * Handles the JSON-RPC responses for public server announcements and publishes
+   * them as Nostr events to the configured relays.
+   * @param message The JSON-RPC response containing the announcement data.
+   * @returns A Promise that resolves when the announcement event has been sent.
+   */
+  private async announcer(message: JSONRPCResponse): Promise<void> {
+    if (InitializeResultSchema.safeParse(message.result).success) {
+      this.sendMcpMessage(
+        message.result as JSONRPCMessage,
+        SERVER_ANNOUNCEMENT_KIND,
+        [
+          ...(this.serverInfo?.name
+            ? [[NOSTR_TAGS.NAME, this.serverInfo?.name]]
+            : []),
+          ...(this.serverInfo?.website
+            ? [[NOSTR_TAGS.WEBSITE, this.serverInfo?.website]]
+            : []),
+          ...(this.serverInfo?.picture
+            ? [[NOSTR_TAGS.PICTURE, this.serverInfo?.picture]]
+            : []),
+          ...(this.serverInfo?.supportEncryption
+            ? [[NOSTR_TAGS.SUPPORT_ENCRYPTION]]
+            : []),
+        ],
+      );
+    } else if (ListToolsResultSchema.safeParse(message.result).success) {
+      this.sendMcpMessage(message.result as JSONRPCMessage, TOOLS_LIST_KIND);
+    } else if (ListResourcesResultSchema.safeParse(message.result).success) {
+      this.sendMcpMessage(
+        message.result as JSONRPCMessage,
+        RESOURCES_LIST_KIND,
+      );
+    } else if (
+      ListResourceTemplatesResultSchema.safeParse(message.result).success
+    ) {
+      this.sendMcpMessage(
+        message.result as JSONRPCMessage,
+        RESOURCETEMPLATES_LIST_KIND,
+      );
+    } else if (ListPromptsResultSchema.safeParse(message.result).success) {
+      this.sendMcpMessage(message.result as JSONRPCMessage, PROMPTS_LIST_KIND);
+    }
   }
 }

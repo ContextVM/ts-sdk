@@ -13,8 +13,6 @@ The Context Vending Machine (CTXVM) specification defines how Nostr and Context 
   - [Public Key Cryptography](#public-key-cryptography)
 - [Protocol Overview](#protocol-overview)
   - [Main Actors](#main-actors)
-- [Protocol Consistency](#protocol-consistency)
-  - [Message Structure Consistency](#message-structure-consistency)
 - [Event Kinds](#event-kinds)
 - [Server Discovery](#server-discovery)
   - [Discovery via Server Announcements (Public Servers)](#discovery-via-server-announcements-public-servers)
@@ -89,7 +87,6 @@ CTXVM leverages Nostr's public key cryptography to ensure message authenticity a
 2. **Identity Management**: Public keys serve as persistent identifiers for all actors in the system:
    - Providers can maintain consistent identities across relays
    - Clients can be uniquely identified for authorization purposes
-   - Server identifiers are associated with provider public keys
 
 The cryptographic properties enable secure authorization flows for paid services and private capabilities without requiring centralized authentication services.
 
@@ -101,26 +98,24 @@ CTXVM bridges MCP and Nostr protocols through a consistent message structure and
 
 The protocol uses these key design principles for message handling:
 
-1. **Content Field Structure**: The `content` field of Nostr events contains stringified MCP messages that omit only the `jsonrpc` version and `id` fields. All other MCP message structures, are preserved exactly as defined in the MCP specification:
+1. **Content Field Structure**: The `content` field of Nostr events contains stringified MCP messages. All MCP message structures, are preserved exactly as defined in the MCP specification:
    - For requests: Contain `method` and `params` fields
    - For responses: Contain the complete MCP response structure with the `result` field properly nested
    - For notifications: Contain `method` and optional `params` fields
 
 2. **Nostr Metadata in Tags**: All Nostr-specific metadata uses event tags:
-   - `d`: Unique server identifier, defined by the provider
-   - `s`: Server identifier for targeting specific servers, should be the `d` tag of the server being targeted
    - `p`: Public key for addressing providers or clients
    - `e`: Event id, references for correlating requests and responses
    - `cap`: Capability tag for tools, resources, and prompts to provide pricing metadata
 
 3. **Unified Event Kind**: CTXVM uses a single event kind for all communication with specific storage characteristics:
    - `25910`: All CTXVM messages (ephemeral events)
-   - `31316`-`31319`: Server announcements and capability listings (addressable events)
+   - `11316`-`11320`: Server announcements and capability listings (replaceable events)
    - `1059`: Encrypted Messages (NIP-59 Gift Wrap)
 
    These event kinds follow Nostr's conventions in [NIP-01](https://github.com/nostr-protocol/nips/blob/master/01.md#kinds):
    - For kind n such that 20000 <= n < 30000, events are ephemeral, which means they are not expected to be stored by relays for a long period, but rather just transmitted.
-   - For kind n such that 30000 <= n < 40000, events are addressable by their kind, pubkey and d tag value -- which means that, for each combination of kind, pubkey and the d tag value, only the latest event MUST be stored by relays, older versions MAY be discarded.
+   - For kind n such that 10000 <= n < 20000, events are addressable by their kind, pubkey and d tag value -- which means that, for each combination of kind, and pubkey, only the latest event MUST be stored by relays, older versions MAY be discarded.
 
 ### Main Actors
 
@@ -131,12 +126,6 @@ There are four main actors in this workflow:
 - **Relays**: Core part of Nostr protocol that allows communication between clients and servers
 - **Clients**: MCP or Nostr clients that discover and consume capabilities from servers
 
-## Protocol Consistency
-
-### Message Structure Consistency
-
-All CTXVM messages use the same fundamental structure while allowing for semantic differentiation through tags and content interpretation
-
 ## Event Kinds
 
 This specification defines these event kinds:
@@ -145,22 +134,25 @@ This specification defines these event kinds:
 | ----- | ------------------------------------- |
 | 25910 | CTXVM Messages                        |
 | 1059  | Encrypted Messages (NIP-59 Gift Wrap) |
-| 31316 | Server Announcement                   |
-| 31317 | Tools List                            |
-| 31318 | Resources List                        |
-| 31319 | Prompts List                          |
+| 11316 | Server Announcement                   |
+| 11317 | Tools List                            |
+| 11318 | Resources List                        |
+| 11319 | Resource Templates List               |
+| 11320 | Prompts List                          |
 
-**Note on Encryption**: When encryption is enabled, kind 25910 events are wrapped using NIP-17/NIP-59 encryption and published as kind 1059 events. Addressable events (kinds 31316-31319) remain unencrypted for discoverability.
+**Note on Encryption**: When encryption is enabled, kind 25910 events are wrapped using NIP-17/NIP-59 encryption and published as kind 1059 events. Addressable events (kinds 11316-11320) remain unencrypted for discoverability.
 
 ## Server Discovery
 
-CTXVM provides two methods of server discovery, the main differences between these two methods being the visibility of the servers and the way they are advertised. Public servers can advertise themselves and their capabilities to improve discoverability when providing a "public" or accessible service. Private servers may not advertise themselves and their capabilities, but they can be discovered by clients that know the provider's public key or server identifier.
+CTXVM provides two methods of server discovery, the main differences between these two methods being the visibility of the servers and the way they are advertised. Public servers can advertise themselves and their capabilities to improve discoverability when providing a "public" or accessible service. Private servers may not advertise themselves and their capabilities, but they can be discovered by clients that know the provider's public key.
 
 ### Discovery via Server Announcements (Public Servers)
 
-// TODO: Improve this section now that the initialization round is managed by clients. This public announcements could allow to just get the connection parameters (public key and serverId) out of a nip19 identifier, like `naddr...`
+Public server announcements act as a service catalog, allowing clients to discover servers and their capabilities through replaceable events on the Nostr network. This mechanism provides an initial overview of what a server offers, and their public keys to connect with them. After discovering a server, clients MUST use the standard MCP initialization process to establish a connection.
 
-Providers announce their servers and capabilities by publishing events with kinds 31316 (server), 31317 (tools/list), 31318 (resources/list), and 31319 (prompts/list).
+Since each server is uniquely identified by its public key, the announcement events are replaceable (kinds 11316-11320), ensuring that only the most recent version of the server's information is active.
+
+Providers announce their servers and capabilities by publishing events with kinds 11316 (server), 11317 (tools/list), 11318 (resources/list), and 11330 (prompts/list).
 
 **Note:** The `content` field of CTXVM events contains stringified MCP messages. The examples below present the `content` as a JSON object for readability; it must be stringified before inclusion in a Nostr event.
 
@@ -168,7 +160,7 @@ Providers announce their servers and capabilities by publishing events with kind
 
 ```json
 {
-  "kind": 31316,
+  "kind": 11316,
   "pubkey": "<provider-pubkey>",
   "content": {
     "protocolVersion": "2025-07-02",
@@ -191,7 +183,6 @@ Providers announce their servers and capabilities by publishing events with kind
     "instructions": "Optional instructions for the client"
   },
   "tags": [
-    ["d", "<server-identifier>"], // Required: Unique identifier for the server
     ["name", "Example Server"], // Optional: Human-readable server name
     ["about", "Server description"], // Optional: Server description
     ["picture", "https://example.com/server.png"], // Optional: Server icon/avatar URL
@@ -205,7 +196,7 @@ Providers announce their servers and capabilities by publishing events with kind
 
 ```json
 {
-  "kind": 31317,
+  "kind": 11317,
   "pubkey": "<provider-pubkey>",
   "content": {
     "tools": [
@@ -225,18 +216,13 @@ Providers announce their servers and capabilities by publishing events with kind
       }
     ]
   },
-  "tags": [
-    ["d", "<unique-identifier>"], // Required: Unique identifier for the tools list
-    ["s", "<server-identifier>"] // Required: Reference to the server it belongs to
-  ]
+  "tags": []
 }
 ```
 
-The rest of the capabilities (resources, prompts, completions, ping, etc) follow the same pattern as the above examples.
+### Server Connection and Initialization
 
-### Direct Discovery (Private Servers)
-
-For servers that are not publicly announced, clients MUST use the MCP initialization process. The flow involves a client initialization request, a server initialization response, and a client initialized notification:
+Whether a server is discovered via public announcements or its public key is already known, clients MUST use the MCP initialization process to establish a connection. This flow applies to all servers and involves a client initialization request, a server initialization response, and a client initialized notification:
 
 #### Client Initialization Request
 
@@ -263,7 +249,6 @@ For servers that are not publicly announced, clients MUST use the MCP initializa
   },
   "tags": [
     ["p", "<provider-pubkey>"],
-    ["s", "<server-identifier>"], // Optional field, if omitted all the servers from the providers SHOULD respond
     ["method", "initialize"]
   ]
 }
@@ -271,7 +256,6 @@ For servers that are not publicly announced, clients MUST use the MCP initializa
 
 - Tags:
   - `p`: Provider public key, to target all the servers from a provider
-  - `s`: Server identifier, optional for target a server
   - `method`: Method name
 
 #### Server Initialization Response
@@ -307,17 +291,14 @@ For servers that are not publicly announced, clients MUST use the MCP initializa
   },
   "tags": [
     ["e", "<client-init-request-id>"],
-    ["d", "<server-identifier>"],
     ["support_encryption"] // Optional: Presence indicates server supports encrypted messages
   ]
 }
 ```
 
-When a server responds to an initialization request, it includes a `d` tag in the response that serves as the server identifier. Clients should use this identifier in the `s` tag of subsequent requests to target this specific server. This approach allows clients to discover and interact with servers without prior knowledge of their identifiers.
-
 - Tags:
-  - `d`: Server identifier, uniquely identifies this server for future requests
   - `e`: Reference to the client's initialization request event
+  - `support_encryption`: Presence indicates server supports encrypted messages
 
 #### Client Initialized Notification
 
@@ -332,8 +313,7 @@ After receiving the server initialization response, the client MUST send an init
     "method": "notifications/initialized"
   },
   "tags": [
-    ["p", "<provider-pubkey>"], // Required: Target provider public key
-    ["s", "<server-identifier>"] // Required: Server identifier
+    ["p", "<provider-pubkey>"] // Required: Target provider public key
   ]
 }
 ```
@@ -350,8 +330,6 @@ All list operations follow the same structure described by MCP, with the specifi
 
 - Tags:
   - `p`: Provider public key, to target all the servers from a provider
-  - `s`: Server identifier, optional for target a server
-  - `method`: Method name
 
 #### List Request Template
 
@@ -369,8 +347,7 @@ All list operations follow the same structure described by MCP, with the specifi
     }
   },
   "tags": [
-    ["p", "<provider-pubkey>"], // Required: Provider's public key
-    ["s", "<server-identifier>"] // Optional: Server identifier
+    ["p", "<provider-pubkey>"] // Required: Provider's public key
   ]
 }
 ```
@@ -418,10 +395,7 @@ All list operations follow the same structure described by MCP, with the specifi
       }
     }
   },
-  "tags": [
-    ["p", "<provider-pubkey>"],
-    ["s", "<server-identifier>"]
-  ]
+  "tags": [["p", "<provider-pubkey>"]]
 }
 ```
 
@@ -476,7 +450,7 @@ From public server announcements:
 
 ```json
 {
-  "kind": 31317,
+  "kind": 11317,
   "content": {
     "tools": [
       {
@@ -486,11 +460,7 @@ From public server announcements:
       }
     ]
   },
-  "tags": [
-    ["d", "server-123/tools/list"],
-    ["s", "server-123"],
-    ["cap", "get_weather", "100", "sats"]
-  ]
+  "tags": [["cap", "get_weather", "100", "sats"]]
 }
 ```
 
@@ -536,13 +506,13 @@ Payment verification is handled by the server and can be implemented using Light
 
 ### Overview
 
-CTXVM supports optional end-to-end encryption for enhanced privacy and security using the Nostr protocol's encryption standards. This feature leverages NIP-17 (Private Direct Messages) for secure message encryption and NIP-59 (Gift Wrap) for metadata protection, ensuring that:
+CTXVM supports optional end-to-end encryption for enhanced privacy and security using the Nostr protocol's encryption standards. This feature leverages a simplified version of NIP-17 (Private Direct Messages) for secure message encryption and NIP-59 (Gift Wrap) for metadata protection, ensuring that:
 
 1. **Message Content Privacy**: All CTXVM message content is encrypted using NIP-44 encryption
 2. **Metadata Protection**: Gift wrapping hides participant identities, timestamps, and message patterns
 3. **Selective Encryption**: Clients and servers can negotiate encryption on a per-session basis
 
-Encryption in CTXVM maintains full compatibility with the standard protocol while adding an additional privacy layer. When encryption is enabled, all kind 25910 events are encrypted using the NIP-17/NIP-59 pattern, while addressable events (server announcements and capability lists) remain unencrypted for discoverability.
+Encryption in CTXVM maintains full compatibility with the standard protocol while adding an additional privacy layer. When encryption is enabled, all kind 25910 events are encrypted using the NIP-17/NIP-59 pattern, while replaceable events (server announcements and capability lists) remain unencrypted for discoverability.
 
 ### Encryption Support Discovery
 
@@ -563,12 +533,11 @@ Encryption support is advertised through the `support_encryption` tag in server 
 
 Clients can discover encryption support by:
 
-1. **Public Server Discovery**: Check for the presence of the `support_encryption` tag in server announcements (kind 31316)
+1. **Public Server Discovery**: Check for the presence of the `support_encryption` tag in server announcements (kind 11316)
 2. **Direct Discovery**: Check for the presence of the `support_encryption` tag in initialization responses
+3. **Encrypted Handshake**: Attempt an encrypted direct discovery, and wait for and encrypted response from the server
 
-### Message Encryption Flow
-
-When encryption is enabled, CTXVM messages follow a simplified NIP-17 pattern with no 'rumor' with NIP-59 gift wrapping:
+When encryption is enabled, CTXVM messages follow a simplified NIP-17 pattern with no 'rumor' with NIP-59 gift wrapping.
 
 #### 1. Request Preparation
 
@@ -590,16 +559,11 @@ The request is prepared as usual:
       }
     }
   },
-  "tags": [
-    ["p", "<provider-pubkey>"],
-    ["s", "<server-identifier>"]
-  ]
+  "tags": [["p", "<provider-pubkey>"]]
 }
 ```
 
-#### 2. Gift Wrapping (NIP-59)
-
-The request is then converted in json string, and gift-wrapped (kind 1059) with a random key, following nip-44 encryption:
+The request is converted into a JSON string and gift-wrapped (kind 1059) with a random key, following NIP-44 encryption.
 
 ```json
 {
@@ -615,71 +579,15 @@ The request is then converted in json string, and gift-wrapped (kind 1059) with 
 
 #### Encrypted Response Structure
 
-Server responses follow the same pattern
-
-Requests are prepared as usual:
-
-```json
-{
-  "kind": 25910,
-  "pubkey": "<provider-pubkey>",
-  "content": {
-    "jsonrpc": "2.0",
-    "id": 2,
-    "result": {
-      "content": [
-        {
-          "type": "text",
-          "text": "Current weather in New York:\nTemperature: 72°F\nConditions: Partly cloudy"
-        }
-      ],
-      "isError": false
-    }
-  },
-  "tags": [["e", "<request-event-id>"]]
-}
-```
-
-The response is then converted in json string, and gift-wrapped (kind 1059) with a random key, following nip-44 encryption:
-
-```json
-{
-  "kind": 1059,
-  "pubkey": "<random-ephemeral-pubkey>",
-  "created_at": "<randomized-timestamp>",
-  "content": "<nip44-encrypted-containing-CTXVM-response>",
-  "tags": [["p", "<client-pubkey>"]],
-  "sig": "<ephemeral-key-signature>"
-}
-```
+Server responses follow the same pattern. The response is converted into a JSON string and gift-wrapped (kind 1059) with a random key, following NIP-44 encryption.
 
 The decrypted inner content contains the standard CTXVM response format.
-
-**Note:** The response should use the id of original request as `e` tag, not the gift-wrapped event `id`.
 
 ## Notifications
 
 All notifications in CTXVM follow the standard MCP notification format and conventions, using the unified kind 25910 event type. This includes notifications for payment requests, progress updates, and all other server-to-client or client-to-server communications.
 
 Notifications are constructed according to the MCP notification template. The direction is determined by the `p` tag: client-to-server notifications are signed by the client's pubkey and use the server's pubkey as the `p` tag; server-to-client notifications are signed by the server's provider pubkey and use the client's pubkey as the `p` tag.
-
-### Notification Event Example
-
-```json
-{
-  "kind": 25910,
-  "pubkey": "<sender-pubkey>",
-  "content": {
-    "method": "notifications/<type>",
-    "params": {
-      /* Optional parameters based on notification type */
-    }
-  },
-  "tags": [
-    ["p", "<recipient-pubkey>"] // Required: Target public key (recipient)
-  ]
-}
-```
 
 ### Payment Required Notification Example
 
@@ -705,144 +613,45 @@ Notifications are constructed according to the MCP notification template. The di
 
 For long-running jobs, servers should send progress notifications frequently to indicate the job is still processing and to prevent client timeout.
 
-## Error Handling
-
-MCP handles two types of errors: protocol errors and execution errors.
-
-### Error Types
-
-| Error Type      | Description                                                        | Format                                                   |
-| --------------- | ------------------------------------------------------------------ | -------------------------------------------------------- |
-| Protocol Error  | JSON-RPC protocol-level errors (invalid method, params, etc.)      | Error object in content with error code and message      |
-| Execution Error | Errors during tool execution (API failures, business logic errors) | Object with `isError: true` and error details in content |
-
-### Error Response Template
-
-```json
-{
-  "kind": 25910,
-  "pubkey": "<provider-pubkey>",
-  "content": {
-    // Either an error object (protocol error):
-    "error": {
-      "code": -32602, // Standard JSON-RPC error code
-      "message": "Error description"
-    },
-    // Or a result with isError flag (tool execution error):
-    "result": {
-      "content": [
-        {
-          "type": "text",
-          "text": "Error details"
-        }
-      ],
-      "isError": true
-    }
-  },
-  "tags": [
-    ["e", "<request-event-id>"] // Required: Reference to the request event
-  ]
-}
-```
-
-**Common Error Codes:**
-
-- `-32700`: Parse error
-- `-32600`: Invalid request
-- `-32601`: Method not found
-- `-32602`: Invalid params
-- `-32603`: Internal error
-- `-32002`: Resource not found
-
 ## Complete Protocol Flow
 
 ```mermaid
 sequenceDiagram
-    participant Client as Nostr Client/CTXVM-Discovery
-    participant Relay as Nostr Relay
-    participant CTXVM as CTXVM-Bridge
-    participant Server as MCP Server
+    participant Client
+    participant Relay
+    participant Server
 
-    rect rgb(240, 240, 240)
-        Note over Client,Server: Discovery Path A: Public Server
-        Note over Relay: Server events already published to relay
-
-        Client->>Relay: Subscribe to kind:31316 events (Server Announcements)
-        Relay-->>Client: Server announcements
-        Client->>Relay: Subscribe to kind:31317 events (Tools List)
-        Relay-->>Client: Available tools
-        Client->>Relay: Subscribe to kind:31318 events (Resources List)
-        Relay-->>Client: Available resources
-        Client->>Relay: Subscribe to kind:31319 events (Prompts List)
-        Relay-->>Client: Available prompts
+    opt Public Server Discovery (Catalog)
+        Client->>Relay: Subscribe to kinds 11316-11320
+        Relay-->>Client: Server Announcements and Capabilities
     end
 
-    rect rgb(240, 240, 240)
-        Note over Client,Server: Discovery Path B: Direct Request
-        Client->>CTXVM: kind:25910, method:initialize
-        CTXVM->>Server: Initialize connection
-        Server-->>CTXVM: Capability response
-        CTXVM-->>Client: kind:25910, Server capabilities
-        Client->>CTXVM: kind:25910, method:notifications/initialized
+    Client->>Relay: Publishes kind 25910 (method: initialize)
+    Relay-->>Server: Forwards initialize request
 
-        Note over Client,CTXVM: Direct capability requests
-        Client->>CTXVM: kind:25910, method:tools/list
-        CTXVM->>Server: Request tools list
-        Server-->>CTXVM: Tools list
-        CTXVM-->>Client: kind:25910, Tools list
+    Server->>Relay: Publishes kind 25910 (initialize response)
+    Relay-->>Client: Forwards initialize response
 
-        Note over Client,CTXVM: (Similar flows for resources/list and prompts/list)
+    Client->>Relay: Publishes kind 25910 (notification: initialized)
+    Relay-->>Server: Forwards initialized notification
+
+    Note over Client,Server: Capability Interaction (e.g., tools/list)
+
+    Client->>Relay: Publishes kind 25910 (method: tools/list)
+    Relay-->>Server: Forwards request
+    Server->>Relay: Publishes kind 25910 (tools/list response)
+    Relay-->>Client: Forwards tools/list response
+
+    Note over Client,Server: Capability Interaction (e.g., tools/call)
+
+    Client->>Relay: Publishes kind 25910 (method: tools/call)
+
+    opt Optional Payment Flow
+      Server->>Relay: Publishes kind 25910 (notification: payment_required)
+      Relay-->>Client: Forwards payment_required
+      Client->>Client: User Pays Invoice
     end
 
-    Note over Client,Server: Tool Execution (Same for both paths)
-    Client->>CTXVM: kind:25910, method:tools/call
-
-    rect rgb(230, 240, 255)
-        Note over Client,CTXVM: Optional Payment Flow
-        CTXVM-->>Client: kind:25910, notifications/payment_required
-        Client->>CTXVM: Payment
-    end
-
-    CTXVM->>Server: Execute Tool
-    Server-->>CTXVM: Results
-    CTXVM-->>Client: kind:25910, Tool results
-
-    Note over Client,Server: Resource Access
-    Client->>CTXVM: kind:25910, method:resources/read
-    CTXVM->>Server: Read Resource
-    Server-->>CTXVM: Resource contents
-    CTXVM-->>Client: kind:25910, Resource content
-
-    Note over Client,Server: Prompt Access
-    Client->>CTXVM: kind:25910, method:prompts/get
-    CTXVM->>Server: Get Prompt
-    Server-->>CTXVM: Prompt content
-    CTXVM-->>Client: kind:25910, Prompt content
-
-    Note over Client,Server: MCP Notifications
-    Server->>CTXVM: Resource updated
-    CTXVM-->>Client: kind:25910, notifications/resources/updated
-
-    Note over Client,Server: Connection Health Monitoring
-    Client->>CTXVM: kind:25910, method:ping
-    CTXVM-->>Client: kind:25910, empty response
+    Server->>Relay: Publishes kind 25910 (tools/call response)
+    Relay-->>Client: Forwards tools/call response
 ```
-
-## Subscription Management
-
-Unlike direct MCP connections, Nostr's pub/sub model requires special handling for long-lived subscriptions:
-
-1. **Connection Persistence**: Clients and servers SHOULD maintain relay connections to receive notifications for subscribed resources.
-
-2. **Progress Notifications**: For long-running operations, servers SHOULD send progress notifications as defined in the protocol to:
-   - Indicate processing status
-   - Prevent client timeouts
-   - Maintain subscription activity
-
-3. **Subscription Termination**: Subscriptions can be terminated in several ways:
-   - When the client receives a successful result
-   - When an error occurs during processing
-   - When the client explicitly sends a cancellation request
-   - When the connection times out due to network issues
-
-4. **Message Correlation**: All responses and notifications MUST include appropriate `e`, and `p` tags to correlate with the original request, ensuring proper message routing in the decentralized environment.
