@@ -27,3 +27,5 @@ await client.callTool({
     b: 2,
   },
 });
+await Bun.sleep(1000);
+await client.ping();

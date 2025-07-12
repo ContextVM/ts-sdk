@@ -37,6 +37,8 @@ import {
  */
 export interface NostrServerTransportOptions extends BaseNostrTransportOptions {
   serverInfo?: ServerInfo;
+  isPublicServer?: boolean;
+  allowedPublicKeys?: string[];
 }
 
 /**
@@ -45,7 +47,6 @@ export interface NostrServerTransportOptions extends BaseNostrTransportOptions {
 export interface ServerInfo {
   name?: string;
   picture?: string;
-  isPublicServer?: boolean;
   website?: string;
   supportEncryption?: boolean;
 }
@@ -74,11 +75,15 @@ export class NostrServerTransport
   public onerror?: (error: Error) => void;
 
   private readonly clientSessions = new Map<string, ClientSession>();
+  private readonly isPublicServer?: boolean;
+  private readonly allowedPublicKeys?: string[];
   private readonly serverInfo?: ServerInfo;
 
   constructor(options: NostrServerTransportOptions) {
     super(options);
     this.serverInfo = options.serverInfo;
+    this.isPublicServer = options.isPublicServer;
+    this.allowedPublicKeys = options.allowedPublicKeys;
   }
 
   /**
@@ -92,6 +97,13 @@ export class NostrServerTransport
     const filters = this.createSubscriptionFilters(pubkey);
 
     await this.subscribe(filters, async (event: NostrEvent) => {
+      if (
+        this.allowedPublicKeys?.length &&
+        !this.allowedPublicKeys.includes(event.pubkey)
+      ) {
+        return; // Stop processing unauthorized messages
+      }
+
       try {
         const mcpMessage = this.convertNostrEventToMcpMessage(event);
 
@@ -110,7 +122,7 @@ export class NostrServerTransport
       }
     });
 
-    if (this.serverInfo?.isPublicServer) {
+    if (this.isPublicServer) {
       this.getAnnouncementData();
     }
   }
@@ -130,14 +142,15 @@ export class NostrServerTransport
    */
   public async send(message: JSONRPCMessage): Promise<void> {
     // Message type detection and routing
+    console.error('message', message);
     if (isJSONRPCResponse(message) || isJSONRPCError(message)) {
       await this.handleResponse(message);
     } else if (isJSONRPCNotification(message)) {
+      this.cleanupInactiveSessions();
       await this.handleNotification(message);
     } else {
       this.onerror?.(new Error('Unknown message type in send()'));
     }
-    this.cleanupInactiveSessions();
   }
 
   /**
@@ -273,6 +286,12 @@ export class NostrServerTransport
     request.id = eventId;
     // Store in client session
     session.pendingRequests.set(eventId, originalRequestId);
+
+    // Track progress tokens if provided
+    const progressToken = request.params?._meta?.progressToken;
+    if (progressToken) {
+      session.pendingRequests.set(String(progressToken), eventId);
+    }
   }
 
   /**
@@ -335,10 +354,23 @@ export class NostrServerTransport
     const tags = this.createResponseTags(targetClientPubkey, nostrEventId);
     await this.sendMcpMessage(response, CTXVM_MESSAGES_KIND, tags);
 
-    // Clean up the pending request
-    this.clientSessions
-      .get(targetClientPubkey)
-      ?.pendingRequests.delete(nostrEventId);
+    // Clean up the pending request and any associated progress token
+    const session = this.clientSessions.get(targetClientPubkey);
+    if (session) {
+      session.pendingRequests.delete(nostrEventId);
+
+      // Find and delete the corresponding progress token if it exists
+      let progressTokenToDelete: string | number | undefined;
+      for (const [key, value] of session.pendingRequests.entries()) {
+        if (value === nostrEventId) {
+          progressTokenToDelete = key;
+          break;
+        }
+      }
+      if (progressTokenToDelete !== undefined) {
+        session.pendingRequests.delete(String(progressTokenToDelete));
+      }
+    }
   }
 
   /**
@@ -348,8 +380,27 @@ export class NostrServerTransport
   private async handleNotification(
     notification: JSONRPCMessage,
   ): Promise<void> {
-    const promises: Promise<void>[] = [];
+    // Special handling for progress notifications
+    if (
+      isJSONRPCNotification(notification) &&
+      notification.method === 'notifications/progress' &&
+      notification.params?._meta?.progressToken
+    ) {
+      const token = String(notification.params._meta.progressToken);
 
+      for (const [clientPubkey, session] of this.clientSessions.entries()) {
+        if (session.pendingRequests.has(token)) {
+          const nostrEventId = session.pendingRequests.get(token) as string;
+          await this.sendNotification(clientPubkey, notification, nostrEventId);
+          return;
+        }
+      }
+
+      this.onerror?.(new Error(`No client found for progress token: ${token}`));
+      return;
+    }
+
+    const promises: Promise<void>[] = [];
     for (const [clientPubkey, session] of this.clientSessions.entries()) {
       if (session.isInitialized) {
         promises.push(this.sendNotification(clientPubkey, notification));
@@ -368,6 +419,7 @@ export class NostrServerTransport
   public async sendNotification(
     clientPubkey: string,
     notification: JSONRPCMessage,
+    correlatedEventId?: string,
   ): Promise<void> {
     const session = this.clientSessions.get(clientPubkey);
     if (!session) {
@@ -376,6 +428,9 @@ export class NostrServerTransport
 
     // Create tags for targeting the specific client
     const tags = this.createRecipientTags(clientPubkey);
+    if (correlatedEventId) {
+      tags.push([NOSTR_TAGS.EVENT_ID, correlatedEventId]);
+    }
 
     await this.sendMcpMessage(notification, CTXVM_MESSAGES_KIND, tags);
   }
