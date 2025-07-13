@@ -4,7 +4,7 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { TEST_PRIVATE_KEY } from '../__mocks__/fixtures.js';
 import { NostrMCPGateway } from './index.js';
-import { NostrTransport } from '../transport/nostr-client-transport.js';
+import { NostrClientTransport } from '../transport/nostr-client-transport.js';
 import { PrivateKeySigner } from '../signer/private-key-signer.js';
 import { SimpleRelayPool } from '../relay/simple-relay-pool.js';
 import { getPublicKey } from 'nostr-tools';
@@ -84,11 +84,11 @@ describe('NostrMCPGateway End-to-End Test', () => {
     await Bun.sleep(100);
   });
 
-  const createClientTransport = (): NostrTransport => {
+  const createClientTransport = (): NostrClientTransport => {
     const clientSigner = new PrivateKeySigner(clientPrivateKey);
     const clientRelayHandler = new SimpleRelayPool([relayUrl]);
 
-    return new NostrTransport({
+    return new NostrClientTransport({
       signer: clientSigner,
       relayHandler: clientRelayHandler,
       serverPubkey: gatewayPublicKey,

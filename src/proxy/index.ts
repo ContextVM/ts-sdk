@@ -1,7 +1,7 @@
 import { Transport } from '@modelcontextprotocol/sdk/shared/transport.js';
 import { JSONRPCMessage } from '@modelcontextprotocol/sdk/types.js';
 import {
-  NostrTransport,
+  NostrClientTransport,
   NostrTransportOptions,
 } from '../transport/nostr-client-transport.js';
 
@@ -28,11 +28,13 @@ export interface NostrMCPProxyOptions {
  */
 export class NostrMCPProxy {
   private mcpHostTransport: Transport;
-  private nostrTransport: NostrTransport;
+  private nostrTransport: NostrClientTransport;
 
   constructor(options: NostrMCPProxyOptions) {
     this.mcpHostTransport = options.mcpHostTransport;
-    this.nostrTransport = new NostrTransport(options.nostrTransportOptions);
+    this.nostrTransport = new NostrClientTransport(
+      options.nostrTransportOptions,
+    );
   }
 
   /**

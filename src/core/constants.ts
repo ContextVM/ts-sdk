@@ -1,3 +1,5 @@
+import { AnnouncementMethods } from './interfaces.js';
+
 /**
  * CTXVM-specific event kinds.
  *
@@ -15,49 +17,63 @@ export const GIFT_WRAP_KIND = 1059;
 /**
  * Addressable event for server announcements.
  */
-export const SERVER_ANNOUNCEMENT_KIND = 31316;
+export const SERVER_ANNOUNCEMENT_KIND = 11316;
 
 /**
  * Addressable event for listing available tools.
  */
-export const TOOLS_LIST_KIND = 31317;
+export const TOOLS_LIST_KIND = 11317;
 
 /**
  * Addressable event for listing available resources.
  */
-export const RESOURCES_LIST_KIND = 31318;
+export const RESOURCES_LIST_KIND = 11318;
+
+/**
+ * Addressable event for listing available resources.
+ */
+export const RESOURCETEMPLATES_LIST_KIND = 11319;
 
 /**
  * Addressable event for listing available prompts.
  */
-export const PROMPTS_LIST_KIND = 31319;
+export const PROMPTS_LIST_KIND = 11320;
 
 /**
  * CTXVM-specific Nostr event tags.
  */
 export const NOSTR_TAGS = {
-  /**
-   * Unique server identifier, defined by the provider.
-   */
-  SERVER_ID: 'd',
-  /**
-   * Server identifier for targeting specific servers.
-   */
-  TARGET_SERVER_ID: 's',
-  /**
-   * Public key for addressing providers or clients.
-   */
   PUBKEY: 'p',
   /**
    * Event ID for correlating requests and responses.
    */
   EVENT_ID: 'e',
   /**
-   * MCP method for easy filtering and routing.
-   */
-  MCP_METHOD: 'method',
-  /**
    * Capability tag for tools, resources, and prompts to provide pricing metadata.
    */
   CAPABILITY: 'cap',
+  /**
+   * Name tag for server announcements.
+   */
+  NAME: 'name',
+  /**
+   * Website tag for server announcements.
+   */
+  WEBSITE: 'website',
+  /**
+   * Picture tag for server announcements.
+   */
+  PICTURE: 'picture',
+  /**
+   * Support encryption tag for server announcements.
+   */
+  SUPPORT_ENCRYPTION: 'support_encryption',
+} as const;
+
+export const announcementMethods: AnnouncementMethods = {
+  server: 'initialize',
+  tools: 'tools/list',
+  resources: 'resources/list',
+  resourceTemplates: 'resources/templates/list',
+  prompts: 'prompts/list',
 } as const;

@@ -4,7 +4,7 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { TEST_PRIVATE_KEY } from '../__mocks__/fixtures.js';
 import { NostrMCPGateway } from './index.js';
-import { NostrTransport } from '../transport/nostr-client-transport.js';
+import { NostrClientTransport } from '../transport/nostr-client-transport.js';
 import { PrivateKeySigner } from '../signer/private-key-signer.js';
 import { SimpleRelayPool } from '../relay/simple-relay-pool.js';
 import { generateSecretKey, getPublicKey } from 'nostr-tools';
@@ -75,11 +75,11 @@ describe('NostrMCPGateway End-to-End Test', () => {
     await Bun.sleep(100);
   });
 
-  const createClientTransport = (privateKey: string): NostrTransport => {
+  const createClientTransport = (privateKey: string): NostrClientTransport => {
     const clientSigner = new PrivateKeySigner(privateKey);
     const clientRelayHandler = new SimpleRelayPool([relayUrl]);
 
-    return new NostrTransport({
+    return new NostrClientTransport({
       signer: clientSigner,
       relayHandler: clientRelayHandler,
       serverPubkey: gatewayPublicKey,
@@ -88,7 +88,7 @@ describe('NostrMCPGateway End-to-End Test', () => {
 
   test('should handle concurrent client connections', async () => {
     const clients: Client[] = [];
-    const transports: NostrTransport[] = [];
+    const transports: NostrClientTransport[] = [];
     const numberOfClients = 5;
     for (let i = 0; i < numberOfClients; i++) {
       const transport = createClientTransport(bytesToHex(generateSecretKey()));
@@ -121,7 +121,7 @@ describe('NostrMCPGateway End-to-End Test', () => {
 
   test('should handle concurrent tool calls and properly correlate requests and responses', async () => {
     const clients: Client[] = [];
-    const transports: NostrTransport[] = [];
+    const transports: NostrClientTransport[] = [];
     const numberOfClients = 5;
 
     // Create multiple clients

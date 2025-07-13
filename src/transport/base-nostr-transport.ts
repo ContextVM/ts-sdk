@@ -86,7 +86,7 @@ export abstract class BaseNostrTransport {
   protected async createSignedNostrEvent(
     message: JSONRPCMessage,
     kind: number,
-    tags: string[][],
+    tags?: NostrEvent['tags'],
   ): Promise<NostrEvent> {
     const pubkey = await this.getPublicKey();
     const unsignedEvent = mcpToNostrEvent(message, pubkey, kind, tags);
@@ -106,7 +106,7 @@ export abstract class BaseNostrTransport {
   protected async sendMcpMessage(
     message: JSONRPCMessage,
     kind: number,
-    tags: string[][],
+    tags?: NostrEvent['tags'],
   ): Promise<string> {
     const event = await this.createSignedNostrEvent(message, kind, tags);
     await this.publishEvent(event);
@@ -133,14 +133,8 @@ export abstract class BaseNostrTransport {
   /**
    * Creates tags for targeting a specific recipient.
    */
-  protected createRecipientTags(
-    recipientPubkey: string,
-    serverIdentifier?: string,
-  ): string[][] {
-    const tags: string[][] = [[NOSTR_TAGS.PUBKEY, recipientPubkey]];
-    if (serverIdentifier) {
-      tags.push([NOSTR_TAGS.TARGET_SERVER_ID, serverIdentifier]);
-    }
+  protected createRecipientTags(recipientPubkey: string): NostrEvent['tags'] {
+    const tags = [[NOSTR_TAGS.PUBKEY, recipientPubkey]];
     return tags;
   }
 
@@ -150,15 +144,11 @@ export abstract class BaseNostrTransport {
   protected createResponseTags(
     recipientPubkey: string,
     originalEventId: string,
-    serverIdentifier?: string,
-  ): string[][] {
-    const tags: string[][] = [
+  ): NostrEvent['tags'] {
+    const tags = [
       [NOSTR_TAGS.PUBKEY, recipientPubkey],
       [NOSTR_TAGS.EVENT_ID, originalEventId],
     ];
-    if (serverIdentifier) {
-      tags.push([NOSTR_TAGS.SERVER_ID, serverIdentifier]);
-    }
     return tags;
   }
 }

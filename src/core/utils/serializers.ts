@@ -42,3 +42,18 @@ export function nostrEventToMcpMessage(event: NostrEvent): JSONRPCMessage {
     );
   }
 }
+
+/**
+ * Extracts a specific tag from a Nostr event.
+ *
+ * @param event The Nostr event.
+ * @param tagName The name of the tag to extract (e.g., 'e', 'p', 'd').
+ * @returns The value of the tag, or undefined if not found.
+ */
+export function getNostrEventTag(
+  tags: NostrEvent['tags'],
+  tagName: string,
+): string | undefined {
+  const tag = tags.find((t) => t[0] === tagName);
+  return tag ? tag[1] : undefined;
+}
