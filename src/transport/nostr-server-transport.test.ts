@@ -128,7 +128,10 @@ describe('NostrServerTransport', () => {
       hexToBytes(allowedClientPrivateKey),
     );
 
-    const server = new McpServer({ name: 'Allowed Server', version: '1.0.0' });
+    const server = new McpServer({
+      name: 'Allowed Server',
+      version: '1.0.0',
+    });
     const allowedTransport = new NostrServerTransport({
       signer: new PrivateKeySigner(serverPrivateKey),
       relayHandler: new SimpleRelayPool([relayUrl]),

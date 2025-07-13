@@ -100,9 +100,8 @@ export class NostrServerTransport
       if (
         this.allowedPublicKeys?.length &&
         !this.allowedPublicKeys.includes(event.pubkey)
-      ) {
+      )
         return; // Stop processing unauthorized messages
-      }
 
       try {
         const mcpMessage = this.convertNostrEventToMcpMessage(event);
