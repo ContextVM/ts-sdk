@@ -9,7 +9,7 @@ import { NostrSigner } from '../core/interfaces.js';
 
 /**
  * A signer that uses a private key to sign events.
- * @argument privateKey - The private key to use for signing.
+ * @argument privateKey - The private key in HEX to use for signing.
  * @returns A signer that uses the provided private key to sign events.
  */
 export class PrivateKeySigner implements NostrSigner {

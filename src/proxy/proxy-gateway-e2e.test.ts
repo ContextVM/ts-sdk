@@ -103,7 +103,7 @@ describe('Proxy-Gateway E2E Test (Without Mock Responses)', () => {
   const getProxyTransport = () => {
     return new StdioClientTransport({
       command: 'bun',
-      args: ['src/proxy/proxy-server.ts'],
+      args: ['src/__mocks__/proxy-stdio-server.ts'],
       env: {
         ...process.env,
         RELAY_URL: relayUrl,

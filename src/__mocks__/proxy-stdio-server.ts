@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
-import { NostrMCPProxy } from './index.js';
+import { NostrMCPProxy } from '../proxy/index.js';
 import { PrivateKeySigner } from '../signer/private-key-signer.js';
 import { SimpleRelayPool } from '../relay/simple-relay-pool.js';
 

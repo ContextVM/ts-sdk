@@ -1,5 +1,5 @@
 import type { JSONRPCMessage } from '@modelcontextprotocol/sdk/types.js';
-import type { Event as NostrEvent, Filter } from 'nostr-tools';
+import type { Filter, NostrEvent } from 'nostr-tools';
 import {
   EncryptionMode,
   NostrSigner,

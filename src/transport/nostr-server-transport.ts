@@ -16,7 +16,6 @@ import {
   isJSONRPCError,
 } from '@modelcontextprotocol/sdk/types.js';
 import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js';
-import type { Event as NostrEvent } from 'nostr-tools';
 import {
   BaseNostrTransport,
   BaseNostrTransportOptions,
@@ -34,6 +33,7 @@ import {
   decryptMessage,
 } from '../core/index.js';
 import { EncryptionMode } from '../core/interfaces.js';
+import { NostrEvent } from 'nostr-tools';
 
 /**
  * Options for configuring the NostrServerTransport.
