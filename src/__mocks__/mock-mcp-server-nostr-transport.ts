@@ -49,9 +49,7 @@ server.registerResource(
 const transport = new NostrServerTransport({
   signer: new PrivateKeySigner(TEST_PRIVATE_KEY),
   relayHandler: new SimpleRelayPool(['ws://localhost:10547']),
-  serverInfo: {
-    isPublicServer: false,
-  },
+  isPublicServer: true,
 });
 
 await server.connect(transport);

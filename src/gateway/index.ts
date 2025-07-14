@@ -165,12 +165,4 @@ export class NostrMCPGateway {
   public isActive(): boolean {
     return this.isRunning;
   }
-
-  /**
-   * Gets the number of pending requests from the Nostr transport.
-   * @returns The number of requests waiting for responses.
-   */
-  public getPendingRequestCount(): number {
-    return this.nostrServerTransport.getPendingRequestCount();
-  }
 }

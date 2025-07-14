@@ -1,12 +1,22 @@
 import type { JSONRPCMessage } from '@modelcontextprotocol/sdk/types.js';
 import type { Event as NostrEvent, Filter } from 'nostr-tools';
-import { NostrSigner, RelayHandler } from '../core/interfaces.js';
+import {
+  EncryptionMode,
+  NostrSigner,
+  RelayHandler,
+} from '../core/interfaces.js';
 import {
   CTXVM_MESSAGES_KIND,
   GIFT_WRAP_KIND,
   mcpToNostrEvent,
   NOSTR_TAGS,
   nostrEventToMcpMessage,
+  encryptMessage,
+  SERVER_ANNOUNCEMENT_KIND,
+  TOOLS_LIST_KIND,
+  RESOURCES_LIST_KIND,
+  RESOURCETEMPLATES_LIST_KIND,
+  PROMPTS_LIST_KIND,
 } from '../core/index.js';
 
 /**
@@ -15,6 +25,7 @@ import {
 export interface BaseNostrTransportOptions {
   signer: NostrSigner;
   relayHandler: RelayHandler;
+  encryptionMode?: EncryptionMode;
 }
 
 /**
@@ -24,11 +35,13 @@ export interface BaseNostrTransportOptions {
 export abstract class BaseNostrTransport {
   protected readonly signer: NostrSigner;
   protected readonly relayHandler: RelayHandler;
+  protected readonly encryptionMode: EncryptionMode;
   protected isConnected = false;
 
   constructor(options: BaseNostrTransportOptions) {
     this.signer = options.signer;
     this.relayHandler = options.relayHandler;
+    this.encryptionMode = options.encryptionMode ?? EncryptionMode.OPTIONAL;
   }
 
   /**
@@ -105,12 +118,41 @@ export abstract class BaseNostrTransport {
    */
   protected async sendMcpMessage(
     message: JSONRPCMessage,
+    recipientPublicKey: string,
     kind: number,
     tags?: NostrEvent['tags'],
+    forceEncryption?: boolean,
   ): Promise<string> {
-    const event = await this.createSignedNostrEvent(message, kind, tags);
-    await this.publishEvent(event);
-    return event.id;
+    console.error('Sending message', kind, message);
+    const unencryptedKinds = [
+      SERVER_ANNOUNCEMENT_KIND,
+      TOOLS_LIST_KIND,
+      RESOURCES_LIST_KIND,
+      RESOURCETEMPLATES_LIST_KIND,
+      PROMPTS_LIST_KIND,
+    ];
+    const shouldEncrypt =
+      (!unencryptedKinds.includes(kind) || forceEncryption) &&
+      (this.encryptionMode === EncryptionMode.REQUIRED ||
+        this.encryptionMode === EncryptionMode.OPTIONAL);
+
+    if (shouldEncrypt) {
+      const signedEvent = await this.createSignedNostrEvent(
+        message,
+        kind,
+        tags,
+      );
+      const encryptedEvent = encryptMessage(
+        JSON.stringify(signedEvent),
+        recipientPublicKey,
+      );
+      await this.publishEvent(encryptedEvent);
+      return signedEvent.id;
+    } else {
+      const event = await this.createSignedNostrEvent(message, kind, tags);
+      await this.publishEvent(event);
+      return event.id;
+    }
   }
 
   /**

@@ -1,0 +1,261 @@
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  describe,
+  test,
+  expect,
+} from 'bun:test';
+import type { Subprocess } from 'bun';
+import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import { NostrServerTransport } from './nostr-server-transport.js';
+import { NostrClientTransport } from './nostr-client-transport.js';
+import { PrivateKeySigner } from '../signer/private-key-signer.js';
+import { SimpleRelayPool } from '../relay/simple-relay-pool.js';
+import { generateSecretKey, getPublicKey } from 'nostr-tools';
+import { bytesToHex, hexToBytes } from 'nostr-tools/utils';
+import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { EncryptionMode } from '../core/interfaces.js';
+
+const baseRelayPort = 7791;
+const relayUrl = `ws://localhost:${baseRelayPort}`;
+
+describe('NostrTransport Encryption', () => {
+  let relayProcess: Subprocess;
+
+  beforeAll(async () => {
+    relayProcess = Bun.spawn(['bun', 'src/__mocks__/mock-relay.ts'], {
+      env: {
+        ...process.env,
+        PORT: `${baseRelayPort}`,
+      },
+      stdout: 'inherit',
+      stderr: 'inherit',
+    });
+    await Bun.sleep(100);
+  });
+
+  afterEach(async () => {
+    if (relayUrl) {
+      try {
+        const clearUrl = relayUrl.replace('ws://', 'http://') + '/clear-cache';
+        await fetch(clearUrl, { method: 'POST' });
+      } catch (error) {
+        console.log('Error clearing relay cache:', error);
+      }
+    }
+  });
+
+  afterAll(async () => {
+    relayProcess?.kill();
+    await Bun.sleep(100);
+  });
+
+  // Helper to create a client and its transport
+  const createClientAndTransport = (
+    privateKey: string,
+    serverPublicKey: string,
+    encryptionMode: EncryptionMode,
+  ) => {
+    const client = new Client({ name: 'TestClient', version: '1.0.0' });
+    const clientNostrTransport = new NostrClientTransport({
+      signer: new PrivateKeySigner(privateKey),
+      relayHandler: new SimpleRelayPool([relayUrl]),
+      serverPubkey: serverPublicKey,
+      encryptionMode,
+    });
+    return { client, clientNostrTransport };
+  };
+
+  // Helper to create a server and its transport
+  const createServerAndTransport = (
+    privateKey: string,
+    encryptionMode: EncryptionMode,
+  ) => {
+    const server = new McpServer({ name: 'TestServer', version: '1.0.0' });
+    const serverTransport = new NostrServerTransport({
+      signer: new PrivateKeySigner(privateKey),
+      relayHandler: new SimpleRelayPool([relayUrl]),
+      encryptionMode,
+      serverInfo: {},
+    });
+    return { server, serverTransport };
+  };
+
+  test('should connect successfully with OPTIONAL encryption on both ends', async () => {
+    const serverPrivateKey = bytesToHex(generateSecretKey());
+    const serverPublicKey = getPublicKey(hexToBytes(serverPrivateKey));
+    const clientPrivateKey = bytesToHex(generateSecretKey());
+
+    const { server, serverTransport } = createServerAndTransport(
+      serverPrivateKey,
+      EncryptionMode.OPTIONAL,
+    );
+    await server.connect(serverTransport);
+
+    const { client, clientNostrTransport } = createClientAndTransport(
+      clientPrivateKey,
+      serverPublicKey,
+      EncryptionMode.OPTIONAL,
+    );
+
+    await expect(client.connect(clientNostrTransport)).resolves.toBeUndefined();
+
+    await client.close();
+    await server.close();
+  }, 5000);
+
+  test('should connect with REQUIRED (client) and OPTIONAL (server)', async () => {
+    const serverPrivateKey = bytesToHex(generateSecretKey());
+    const serverPublicKey = getPublicKey(hexToBytes(serverPrivateKey));
+    const clientPrivateKey = bytesToHex(generateSecretKey());
+
+    const { server, serverTransport } = createServerAndTransport(
+      serverPrivateKey,
+      EncryptionMode.OPTIONAL,
+    );
+    await server.connect(serverTransport);
+
+    const { client, clientNostrTransport } = createClientAndTransport(
+      clientPrivateKey,
+      serverPublicKey,
+      EncryptionMode.REQUIRED,
+    );
+
+    await expect(client.connect(clientNostrTransport)).resolves.toBeUndefined();
+
+    await client.close();
+    await server.close();
+  }, 5000);
+
+  test('should connect with OPTIONAL (client) and REQUIRED (server)', async () => {
+    const serverPrivateKey = bytesToHex(generateSecretKey());
+    const serverPublicKey = getPublicKey(hexToBytes(serverPrivateKey));
+    const clientPrivateKey = bytesToHex(generateSecretKey());
+
+    const { server, serverTransport } = createServerAndTransport(
+      serverPrivateKey,
+      EncryptionMode.REQUIRED,
+    );
+    await server.connect(serverTransport);
+
+    const { client, clientNostrTransport } = createClientAndTransport(
+      clientPrivateKey,
+      serverPublicKey,
+      EncryptionMode.OPTIONAL,
+    );
+
+    await expect(client.connect(clientNostrTransport)).resolves.toBeUndefined();
+
+    await client.close();
+    await server.close();
+  }, 5000);
+
+  test('should connect with REQUIRED on both ends', async () => {
+    const serverPrivateKey = bytesToHex(generateSecretKey());
+    const serverPublicKey = getPublicKey(hexToBytes(serverPrivateKey));
+    const clientPrivateKey = bytesToHex(generateSecretKey());
+
+    const { server, serverTransport } = createServerAndTransport(
+      serverPrivateKey,
+      EncryptionMode.REQUIRED,
+    );
+    await server.connect(serverTransport);
+
+    const { client, clientNostrTransport } = createClientAndTransport(
+      clientPrivateKey,
+      serverPublicKey,
+      EncryptionMode.REQUIRED,
+    );
+
+    await expect(client.connect(clientNostrTransport)).resolves.toBeUndefined();
+
+    await client.close();
+    await server.close();
+  }, 5000);
+
+  test('should fail to connect if client requires encryption and server disables it', async () => {
+    const serverPrivateKey = bytesToHex(generateSecretKey());
+    const serverPublicKey = getPublicKey(hexToBytes(serverPrivateKey));
+    const clientPrivateKey = bytesToHex(generateSecretKey());
+
+    const { server, serverTransport } = createServerAndTransport(
+      serverPrivateKey,
+      EncryptionMode.DISABLED,
+    );
+    await server.connect(serverTransport);
+
+    const { client, clientNostrTransport } = createClientAndTransport(
+      clientPrivateKey,
+      serverPublicKey,
+      EncryptionMode.REQUIRED,
+    );
+
+    const connectPromise = client.connect(clientNostrTransport);
+    const timeoutPromise = new Promise((resolve) =>
+      setTimeout(() => resolve('timeout'), 2000),
+    );
+
+    await expect(Promise.race([connectPromise, timeoutPromise])).resolves.toBe(
+      'timeout',
+    );
+
+    await client.close();
+    await server.close();
+  }, 5000);
+
+  test('should connect successfully if both client and server have encryption disabled', async () => {
+    const serverPrivateKey = bytesToHex(generateSecretKey());
+    const serverPublicKey = getPublicKey(hexToBytes(serverPrivateKey));
+    const clientPrivateKey = bytesToHex(generateSecretKey());
+
+    const { server, serverTransport } = createServerAndTransport(
+      serverPrivateKey,
+      EncryptionMode.DISABLED,
+    );
+    await server.connect(serverTransport);
+
+    const { client, clientNostrTransport } = createClientAndTransport(
+      clientPrivateKey,
+      serverPublicKey,
+      EncryptionMode.DISABLED,
+    );
+
+    await expect(client.connect(clientNostrTransport)).resolves.toBeUndefined();
+
+    await client.close();
+    await server.close();
+  }, 5000);
+
+  test('should fail to connect if client encryption is disabled and server requires it', async () => {
+    const serverPrivateKey = bytesToHex(generateSecretKey());
+    const serverPublicKey = getPublicKey(hexToBytes(serverPrivateKey));
+    const clientPrivateKey = bytesToHex(generateSecretKey());
+
+    const { server, serverTransport } = createServerAndTransport(
+      serverPrivateKey,
+      EncryptionMode.REQUIRED, // Server requires encryption
+    );
+    await server.connect(serverTransport);
+
+    const { client, clientNostrTransport } = createClientAndTransport(
+      clientPrivateKey,
+      serverPublicKey,
+      EncryptionMode.DISABLED, // Client encryption is disabled
+    );
+
+    // The client should not be able to connect because the server requires encryption
+    // but the client is trying to connect without encryption.
+    const connectPromise = client.connect(clientNostrTransport);
+    const timeoutPromise = new Promise((resolve) =>
+      setTimeout(() => resolve('timeout'), 2000),
+    );
+
+    await expect(Promise.race([connectPromise, timeoutPromise])).resolves.toBe(
+      'timeout',
+    );
+
+    await client.close();
+    await server.close();
+  }, 5000);
+});

@@ -24,13 +24,16 @@ import {
 import {
   announcementMethods,
   CTXVM_MESSAGES_KIND,
+  GIFT_WRAP_KIND,
   NOSTR_TAGS,
   PROMPTS_LIST_KIND,
   RESOURCES_LIST_KIND,
   RESOURCETEMPLATES_LIST_KIND,
   SERVER_ANNOUNCEMENT_KIND,
   TOOLS_LIST_KIND,
-} from '../core/constants.js';
+  decryptMessage,
+} from '../core/index.js';
+import { EncryptionMode } from '../core/interfaces.js';
 
 /**
  * Options for configuring the NostrServerTransport.
@@ -39,6 +42,7 @@ export interface NostrServerTransportOptions extends BaseNostrTransportOptions {
   serverInfo?: ServerInfo;
   isPublicServer?: boolean;
   allowedPublicKeys?: string[];
+  encryptionMode?: EncryptionMode;
 }
 
 /**
@@ -48,7 +52,6 @@ export interface ServerInfo {
   name?: string;
   picture?: string;
   website?: string;
-  supportEncryption?: boolean;
 }
 
 /**
@@ -56,6 +59,7 @@ export interface ServerInfo {
  */
 interface ClientSession {
   isInitialized: boolean;
+  isEncrypted: boolean;
   lastActivity: number;
   pendingRequests: Map<string, string | number>;
 }
@@ -96,30 +100,7 @@ export class NostrServerTransport
     // Subscribe to events targeting this server's public key
     const filters = this.createSubscriptionFilters(pubkey);
 
-    await this.subscribe(filters, async (event: NostrEvent) => {
-      if (
-        this.allowedPublicKeys?.length &&
-        !this.allowedPublicKeys.includes(event.pubkey)
-      )
-        return; // Stop processing unauthorized messages
-
-      try {
-        const mcpMessage = this.convertNostrEventToMcpMessage(event);
-
-        // Message handling with unified session management
-        this.handleIncomingMessage(event.pubkey, event.id, mcpMessage);
-
-        // Call standard Transport handler
-        this.onmessage?.(mcpMessage);
-      } catch (error) {
-        console.error('Error handling incoming Nostr event:', error);
-        this.onerror?.(
-          error instanceof Error
-            ? error
-            : new Error('Failed to handle incoming Nostr event'),
-        );
-      }
-    });
+    await this.subscribe(filters, this.processIncomingEvent.bind(this));
 
     if (this.isPublicServer) {
       this.getAnnouncementData();
@@ -141,7 +122,6 @@ export class NostrServerTransport
    */
   public async send(message: JSONRPCMessage): Promise<void> {
     // Message type detection and routing
-    console.error('message', message);
     if (isJSONRPCResponse(message) || isJSONRPCError(message)) {
       await this.handleResponse(message);
     } else if (isJSONRPCNotification(message)) {
@@ -182,42 +162,67 @@ export class NostrServerTransport
    * them as Nostr events to the configured relays.
    * @param message The JSON-RPC response containing the announcement data.
    */
-  private announcer(message: JSONRPCResponse): void {
+  private async announcer(message: JSONRPCResponse): Promise<void> {
+    const commonTags = [
+      ...(this.serverInfo?.name
+        ? [[NOSTR_TAGS.NAME, this.serverInfo.name]]
+        : []),
+      ...(this.serverInfo?.website
+        ? [[NOSTR_TAGS.WEBSITE, this.serverInfo.website]]
+        : []),
+      ...(this.serverInfo?.picture
+        ? [[NOSTR_TAGS.PICTURE, this.serverInfo.picture]]
+        : []),
+      ...(this.encryptionMode === EncryptionMode.OPTIONAL ||
+      this.encryptionMode === EncryptionMode.REQUIRED
+        ? [[NOSTR_TAGS.SUPPORT_ENCRYPTION]]
+        : []),
+    ];
+
+    const recipientPubkey = await this.getPublicKey();
+
     if (InitializeResultSchema.safeParse(message.result).success) {
-      this.sendMcpMessage(
+      await this.sendMcpMessage(
         message.result as JSONRPCMessage,
+        recipientPubkey,
         SERVER_ANNOUNCEMENT_KIND,
-        [
-          ...(this.serverInfo?.name
-            ? [[NOSTR_TAGS.NAME, this.serverInfo?.name]]
-            : []),
-          ...(this.serverInfo?.website
-            ? [[NOSTR_TAGS.WEBSITE, this.serverInfo?.website]]
-            : []),
-          ...(this.serverInfo?.picture
-            ? [[NOSTR_TAGS.PICTURE, this.serverInfo?.picture]]
-            : []),
-          ...(this.serverInfo?.supportEncryption
-            ? [[NOSTR_TAGS.SUPPORT_ENCRYPTION]]
-            : []),
-        ],
+        commonTags,
+        false,
       );
     } else if (ListToolsResultSchema.safeParse(message.result).success) {
-      this.sendMcpMessage(message.result as JSONRPCMessage, TOOLS_LIST_KIND);
-    } else if (ListResourcesResultSchema.safeParse(message.result).success) {
-      this.sendMcpMessage(
+      await this.sendMcpMessage(
         message.result as JSONRPCMessage,
+        recipientPubkey,
+        TOOLS_LIST_KIND,
+        [],
+        false,
+      );
+    } else if (ListResourcesResultSchema.safeParse(message.result).success) {
+      await this.sendMcpMessage(
+        message.result as JSONRPCMessage,
+        recipientPubkey,
         RESOURCES_LIST_KIND,
+        [],
+        false,
       );
     } else if (
       ListResourceTemplatesResultSchema.safeParse(message.result).success
     ) {
-      this.sendMcpMessage(
+      await this.sendMcpMessage(
         message.result as JSONRPCMessage,
+        recipientPubkey,
         RESOURCETEMPLATES_LIST_KIND,
+        [],
+        false,
       );
     } else if (ListPromptsResultSchema.safeParse(message.result).success) {
-      this.sendMcpMessage(message.result as JSONRPCMessage, PROMPTS_LIST_KIND);
+      await this.sendMcpMessage(
+        message.result as JSONRPCMessage,
+        recipientPubkey,
+        PROMPTS_LIST_KIND,
+        [],
+        false,
+      );
     }
   }
 
@@ -231,9 +236,14 @@ export class NostrServerTransport
     clientPubkey: string,
     eventId: string,
     message: JSONRPCMessage,
+    isEncrypted: boolean,
   ): void {
     const now = Date.now();
-    const session = this.getOrCreateClientSession(clientPubkey, now);
+    const session = this.getOrCreateClientSession(
+      clientPubkey,
+      now,
+      isEncrypted,
+    );
 
     // Update session activity
     session.lastActivity = now;
@@ -254,17 +264,20 @@ export class NostrServerTransport
   private getOrCreateClientSession(
     clientPubkey: string,
     now: number,
+    isEncrypted: boolean,
   ): ClientSession {
     const session = this.clientSessions.get(clientPubkey);
     if (!session) {
       const newSession: ClientSession = {
         isInitialized: false,
+        isEncrypted,
         lastActivity: now,
         pendingRequests: new Map(),
       };
       this.clientSessions.set(clientPubkey, newSession);
       return newSession;
     }
+    session.isEncrypted = isEncrypted;
     return session;
   }
 
@@ -320,7 +333,7 @@ export class NostrServerTransport
     // Handle special announcement responses
     if (response.id === 'announcement') {
       if (isJSONRPCResponse(response)) {
-        this.announcer(response);
+        await this.announcer(response);
       }
       return;
     }
@@ -350,11 +363,31 @@ export class NostrServerTransport
     response.id = originalRequestId;
 
     // Send the response back to the original requester
+    const session = this.clientSessions.get(targetClientPubkey);
+    if (!session) {
+      this.onerror?.(
+        new Error(`No session found for client: ${targetClientPubkey}`),
+      );
+      return;
+    }
     const tags = this.createResponseTags(targetClientPubkey, nostrEventId);
-    await this.sendMcpMessage(response, CTXVM_MESSAGES_KIND, tags);
+    if (
+      isJSONRPCResponse(response) &&
+      InitializeResultSchema.safeParse(response.result).success &&
+      (this.encryptionMode === EncryptionMode.OPTIONAL ||
+        this.encryptionMode === EncryptionMode.REQUIRED)
+    ) {
+      tags.push([NOSTR_TAGS.SUPPORT_ENCRYPTION]);
+    }
+    await this.sendMcpMessage(
+      response,
+      targetClientPubkey,
+      CTXVM_MESSAGES_KIND,
+      tags,
+      session.isEncrypted,
+    );
 
     // Clean up the pending request and any associated progress token
-    const session = this.clientSessions.get(targetClientPubkey);
     if (session) {
       session.pendingRequests.delete(nostrEventId);
 
@@ -431,7 +464,75 @@ export class NostrServerTransport
       tags.push([NOSTR_TAGS.EVENT_ID, correlatedEventId]);
     }
 
-    await this.sendMcpMessage(notification, CTXVM_MESSAGES_KIND, tags);
+    await this.sendMcpMessage(
+      notification,
+      clientPubkey,
+      CTXVM_MESSAGES_KIND,
+      tags,
+      session.isEncrypted,
+    );
+  }
+
+  /**
+   * Processes incoming Nostr events, handling decryption and client authorization.
+   * This method centralizes the logic for determining whether to process an event
+   * based on encryption mode and allowed public keys.
+   * @param event The incoming Nostr event.
+   */
+  private async processIncomingEvent(event: NostrEvent): Promise<void> {
+    let currentEvent = event;
+    let isEncrypted = false;
+
+    if (event.kind === GIFT_WRAP_KIND) {
+      if (this.encryptionMode === EncryptionMode.DISABLED) {
+        console.warn(
+          `Received encrypted message from ${event.pubkey} but encryption is disabled. Ignoring.`,
+        );
+        return;
+      }
+      try {
+        const secretKey = await this.signer.getSecretKey();
+        if (!secretKey) {
+          throw new Error('Server secret key is unavailable for decryption.');
+        }
+        const decryptedJson = decryptMessage(event, secretKey);
+        currentEvent = JSON.parse(decryptedJson) as NostrEvent;
+        isEncrypted = true;
+      } catch (error) {
+        console.error('Error handling encrypted message:', error);
+        this.onerror?.(
+          error instanceof Error
+            ? error
+            : new Error('Failed to handle encrypted Nostr event'),
+        );
+        return;
+      }
+    } else if (this.encryptionMode === EncryptionMode.REQUIRED) {
+      console.warn(
+        `Received unencrypted message from ${event.pubkey} but encryption is required. Ignoring.`,
+      );
+      return;
+    }
+
+    // After decryption (if applicable), check allowed public keys
+    if (
+      this.allowedPublicKeys?.length &&
+      !this.allowedPublicKeys.includes(currentEvent.pubkey)
+    ) {
+      console.warn(
+        `Unauthorized message from ${currentEvent.pubkey}. Ignoring.`,
+      );
+      return;
+    }
+
+    const mcpMessage = this.convertNostrEventToMcpMessage(currentEvent);
+    this.handleIncomingMessage(
+      currentEvent.pubkey,
+      currentEvent.id,
+      mcpMessage,
+      isEncrypted,
+    );
+    this.onmessage?.(mcpMessage);
   }
 
   /**
