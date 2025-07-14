@@ -40,14 +40,21 @@ export class NostrMCPGateway {
    * Sets up event handlers for both transports.
    */
   private setupEventHandlers(): void {
-    // Handle incoming messages from Nostr (requests from clients)
-    this.nostrServerTransport.onmessage =
-      this.handleMessageFromNostr.bind(this);
+    // Forward messages from Nostr to the MCP server, handling any potential errors.
+    this.nostrServerTransport.onmessage = (message: JSONRPCMessage) => {
+      this.mcpServerTransport
+        .send(message)
+        .catch(this.handleServerError.bind(this));
+    };
     this.nostrServerTransport.onerror = this.handleNostrError.bind(this);
     this.nostrServerTransport.onclose = this.handleNostrClose.bind(this);
 
-    // Handle incoming messages from MCP server (responses to our forwarded requests)
-    this.mcpServerTransport.onmessage = this.handleMessageFromServer.bind(this);
+    // Forward messages from the MCP server to the Nostr transport, handling any potential errors.
+    this.mcpServerTransport.onmessage = (message: JSONRPCMessage) => {
+      this.nostrServerTransport
+        .send(message)
+        .catch(this.handleNostrError.bind(this));
+    };
     this.mcpServerTransport.onerror = this.handleServerError.bind(this);
     this.mcpServerTransport.onclose = this.handleServerClose.bind(this);
   }
@@ -95,38 +102,6 @@ export class NostrMCPGateway {
     }
   }
 
-  /**
-   * Handles incoming MCP messages from Nostr clients.
-   * Simply forwards the message to the MCP server without any correlation logic.
-   * @param message The MCP message received from Nostr.
-   */
-  private async handleMessageFromNostr(message: JSONRPCMessage): Promise<void> {
-    try {
-      // Forward the message directly to the MCP server
-      await this.mcpServerTransport.send(message);
-    } catch (error) {
-      console.error('Error handling message from Nostr:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Handles incoming MCP messages from the server (responses to forwarded requests).
-   * Simply forwards the message to the Nostr transport, which handles correlation.
-   * @param message The MCP response message from the server.
-   */
-  private async handleMessageFromServer(
-    message: JSONRPCMessage,
-  ): Promise<void> {
-    try {
-      // Forward the message directly to the Nostr transport
-      // The transport will handle correlation and routing
-      await this.nostrServerTransport.send(message);
-    } catch (error) {
-      console.error('Error handling message from server:', error);
-      throw error;
-    }
-  }
 
   /**
    * Handles errors from the Nostr transport.
@@ -164,13 +139,5 @@ export class NostrMCPGateway {
    */
   public isActive(): boolean {
     return this.isRunning;
-  }
-
-  /**
-   * Gets the number of pending requests from the Nostr transport.
-   * @returns The number of requests waiting for responses.
-   */
-  public getPendingRequestCount(): number {
-    return this.nostrServerTransport.getPendingRequestCount();
   }
 }

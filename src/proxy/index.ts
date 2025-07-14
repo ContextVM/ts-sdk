@@ -44,28 +44,10 @@ export class NostrMCPProxy {
    * @returns Promise that resolves when both transports are started
    */
   public async start(): Promise<void> {
-    // Start listening for messages from the local MCP Host
-    await this.mcpHostTransport.start();
-
-    this.mcpHostTransport.onmessage = (message) => {
-      this.handleMessageFromHost(message).catch((err: Error) =>
-        console.error('Error handling message from host:', err),
-      );
-    };
-    this.mcpHostTransport.onerror = (err) =>
-      console.error('MCP Host Transport Error:', err);
-    this.mcpHostTransport.onclose = () => {
-      console.log('MCP Host Transport closed');
-    };
-
-    // Start the Nostr transport to communicate with the remote Gateway
-    await this.nostrTransport.start();
-    this.nostrTransport.onmessage = this.handleMessageFromNostr.bind(this);
-    this.nostrTransport.onerror = (err) =>
-      console.error('Nostr Transport Error:', err);
-    this.nostrTransport.onclose = () => {
-      console.log('Nostr Transport closed');
-    };
+    // Set up message handlers
+    this.setupEventHandlers();
+    // Start both transports
+    await Promise.all([this.mcpHostTransport.start(), this.nostrTransport.start()]);
 
     console.log('NostrMCPProxy started.');
   }
@@ -81,25 +63,28 @@ export class NostrMCPProxy {
     console.log('NostrMCPProxy stopped.');
   }
 
-  /**
-   * Handles incoming messages from the local MCP Host.
-   * It forwards the message to the Nostr network and maintains ID correlation.
-   *
-   * @param message - The JSON-RPC message from the MCP host
-   * @returns Promise that resolves when the message is processed
-   */
-  public async handleMessageFromHost(message: JSONRPCMessage): Promise<void> {
-    await this.nostrTransport.send(message);
-  }
+  private setupEventHandlers(): void {
+    // Forward messages from the local host to Nostr.
+    this.mcpHostTransport.onmessage = (message: JSONRPCMessage) => {
+      this.nostrTransport
+        .send(message)
+        .catch((err) => console.error('Error sending message to Nostr:', err));
+    };
+    this.mcpHostTransport.onerror = (err) =>
+      console.error('MCP Host Transport Error:', err);
+    this.mcpHostTransport.onclose = () =>
+      console.log('MCP Host Transport closed');
 
-  /**
-   * Handles incoming messages from the Nostr network.
-   * It looks up the original request ID and forwards the response
-   * to the local MCP Host with proper ID correlation.
-   *
-   * @param message - The JSON-RPC message from the Nostr network
-   */
-  private handleMessageFromNostr(message: JSONRPCMessage): void {
-    this.mcpHostTransport.send(message);
+    // Forward messages from Nostr back to the local host.
+    this.nostrTransport.onmessage = (message: JSONRPCMessage) => {
+      this.mcpHostTransport
+        .send(message)
+        .catch((err) =>
+          console.error('Error sending message to local host:', err),
+        );
+    };
+    this.nostrTransport.onerror = (err) =>
+      console.error('Nostr Transport Error:', err);
+    this.nostrTransport.onclose = () => console.log('Nostr Transport closed');
   }
 }

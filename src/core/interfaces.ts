@@ -8,6 +8,18 @@ import {
 import type { Filter, NostrEvent } from 'nostr-tools';
 
 /**
+ * Defines the encryption mode for the transport.
+ * - `optional`: Encrypts messages if the incoming message was encrypted.
+ * - `required`: Enforces encryption for all messages.
+ * - `disabled`: Disables encryption entirely.
+ */
+export enum EncryptionMode {
+  OPTIONAL = 'optional',
+  REQUIRED = 'required',
+  DISABLED = 'disabled',
+}
+
+/**
  * A generic interface for Nostr signers.
  */
 export interface NostrSigner {
