@@ -1,11 +1,11 @@
-# CTXVM Protocol Specification
+# ContextVM Protocol Specification
 
 **MCP Version:** `mcp:2025-03-26`
 **Status:** Draft
 
 ## Abstract
 
-The Context Vending Machine (CTXVM) specification defines how Nostr and Context Vending Machines can be used to expose Model Context Protocol (MCP) server capabilities, enabling standardized usage of these resources through a decentralized, cryptographically secure messaging system.
+The Context Vending Machine (ContextVM) specification defines how Nostr and Context Vending Machines can be used to expose Model Context Protocol (MCP) server capabilities, enabling standardized usage of these resources through a decentralized, cryptographically secure messaging system.
 
 ## Table of Contents
 
@@ -43,8 +43,8 @@ The Context Vending Machine (CTXVM) specification defines how Nostr and Context 
     - [2. Seal Creation (NIP-17)](#2-seal-creation-nip-17)
     - [3. Gift Wrapping (NIP-59)](#3-gift-wrapping-nip-59)
   - [Encrypted Event Structure](#encrypted-event-structure)
-    - [Original CTXVM Request](#original-CTXVM-request)
-    - [Encrypted CTXVM Request](#encrypted-CTXVM-request)
+    - [Original ContextVM Request](#original-ContextVM-request)
+    - [Encrypted ContextVM Request](#encrypted-ContextVM-request)
     - [Encrypted Response Structure](#encrypted-response-structure)
 - [Notifications](#notifications)
   - [Notification Template](#notification-template)
@@ -66,18 +66,18 @@ This specification aims to:
 2. Provide a consistent experience for clients accessing capabilities, and servers exposing their capabilities
 3. Maintain compatibility with both protocols while preserving their security models
 
-By integrating these protocols, CTXVM combines the standardized capability framework of MCP with the decentralized, cryptographically secure messaging of Nostr. This integration enables several key advantages:
+By integrating these protocols, ContextVM combines the standardized capability framework of MCP with the decentralized, cryptographically secure messaging of Nostr. This integration enables several key advantages:
 
 - **Discoverability**: MCP servers can be discovered through the Nostr network without centralized registries
 - **Verifiability**: All messages are cryptographically signed using Nostr's public keys
 - **Decentralization**: No single point of failure for service discovery or communication
-- **Protocol Interoperability**: Both MCP and CTXVMs utilize JSON-RPC patterns, enabling seamless communication between the protocols
+- **Protocol Interoperability**: Both MCP and ContextVMs utilize JSON-RPC patterns, enabling seamless communication between the protocols
 
 The integration preserves the security model of both protocols while enabling new patterns of interaction.
 
 ### Public Key Cryptography
 
-CTXVM leverages Nostr's public key cryptography to ensure message authenticity and integrity:
+ContextVM leverages Nostr's public key cryptography to ensure message authenticity and integrity:
 
 1. **Message Verification**: Every message is cryptographically signed by the sender's private key and can be verified using their public key, ensuring that:
    - Server announcements come from legitimate providers
@@ -92,24 +92,19 @@ The cryptographic properties enable secure authorization flows for paid services
 
 ## Protocol Overview
 
-CTXVM bridges MCP and Nostr protocols through a consistent message structure and well-defined workflow.
-
 ### Message Structure
 
 The protocol uses these key design principles for message handling:
 
-1. **Content Field Structure**: The `content` field of Nostr events contains stringified MCP messages. All MCP message structures, are preserved exactly as defined in the MCP specification:
-   - For requests: Contain `method` and `params` fields
-   - For responses: Contain the complete MCP response structure with the `result` field properly nested
-   - For notifications: Contain `method` and optional `params` fields
+1. **Content Field Structure**: The `content` field of Nostr events contains stringified MCP messages. All MCP message structures, are preserved exactly as defined in the MCP specification
 
 2. **Nostr Metadata in Tags**: All Nostr-specific metadata uses event tags:
    - `p`: Public key for addressing providers or clients
    - `e`: Event id, references for correlating requests and responses
    - `cap`: Capability tag for tools, resources, and prompts to provide pricing metadata
 
-3. **Unified Event Kind**: CTXVM uses a single event kind for all communication with specific storage characteristics:
-   - `25910`: All CTXVM messages (ephemeral events)
+3. **Unified Event Kind**: ContextVM uses a single event kind for all communication with specific storage characteristics:
+   - `25910`: All ContextVM messages (ephemeral events)
    - `11316`-`11320`: Server announcements and capability listings (replaceable events)
    - `1059`: Encrypted Messages (NIP-59 Gift Wrap)
 
@@ -119,10 +114,9 @@ The protocol uses these key design principles for message handling:
 
 ### Main Actors
 
-There are four main actors in this workflow:
+There are three main actors in this workflow:
 
-- **Providers**: Entities running MCP server(s), operating behind a Nostr public key
-- **Servers**: MCP servers exposing capabilities, operated by a provider
+- **Servers**: MCP servers exposing capabilities, operated by a provider using a public key
 - **Relays**: Core part of Nostr protocol that allows communication between clients and servers
 - **Clients**: MCP or Nostr clients that discover and consume capabilities from servers
 
@@ -132,7 +126,7 @@ This specification defines these event kinds:
 
 | Kind  | Description                           |
 | ----- | ------------------------------------- |
-| 25910 | CTXVM Messages                        |
+| 25910 | ContextVM Messages                    |
 | 1059  | Encrypted Messages (NIP-59 Gift Wrap) |
 | 11316 | Server Announcement                   |
 | 11317 | Tools List                            |
@@ -140,21 +134,21 @@ This specification defines these event kinds:
 | 11319 | Resource Templates List               |
 | 11320 | Prompts List                          |
 
-**Note on Encryption**: When encryption is enabled, kind 25910 events are wrapped using NIP-17/NIP-59 encryption and published as kind 1059 events. Addressable events (kinds 11316-11320) remain unencrypted for discoverability.
+**Note on Encryption**: When encryption is enabled, kind 25910 events are wrapped using [NIP-59](https://github.com/nostr-protocol/nips/blob/master/59.md) and published as kind 1059 events. Addressable events (kinds 11316-11320) remain unencrypted for discoverability.
 
 ## Server Discovery
 
-CTXVM provides two methods of server discovery, the main differences between these two methods being the visibility of the servers and the way they are advertised. Public servers can advertise themselves and their capabilities to improve discoverability when providing a "public" or accessible service. Private servers may not advertise themselves and their capabilities, but they can be discovered by clients that know the provider's public key.
+ContextVM provides two methods of server discovery, the main differences between these two methods being the visibility of the servers and the way they are advertised. Public servers can advertise themselves and their capabilities to improve discoverability. Private servers may not advertise themselves and their capabilities, but they can be discovered by clients that know the provider's public key.
 
 ### Discovery via Server Announcements (Public Servers)
 
-Public server announcements act as a service catalog, allowing clients to discover servers and their capabilities through replaceable events on the Nostr network. This mechanism provides an initial overview of what a server offers, and their public keys to connect with them. After discovering a server, clients MUST use the standard MCP initialization process to establish a connection.
+Public server announcements act as a service catalog, allowing clients to discover servers and their capabilities through replaceable events on the Nostr network. This mechanism provides an initial overview of what a server offers, and their public keys to connect with them.
 
 Since each server is uniquely identified by its public key, the announcement events are replaceable (kinds 11316-11320), ensuring that only the most recent version of the server's information is active.
 
-Providers announce their servers and capabilities by publishing events with kinds 11316 (server), 11317 (tools/list), 11318 (resources/list), and 11330 (prompts/list).
+Providers announce their servers and capabilities by publishing events with kinds 11316 (server), 11317 (tools/list), 11318 (resources/list), 11319 (resource templates/list), and 11320 (prompts/list).
 
-**Note:** The `content` field of CTXVM events contains stringified MCP messages. The examples below present the `content` as a JSON object for readability; it must be stringified before inclusion in a Nostr event.
+**Note:** The `content` field of ContextVM events contains stringified MCP messages. The examples below present the `content` as a JSON object for readability; it must be stringified before inclusion in a Nostr event.
 
 #### Server Announcement Event
 
@@ -247,16 +241,12 @@ Whether a server is discovered via public announcements or its public key is alr
       }
     }
   },
-  "tags": [
-    ["p", "<provider-pubkey>"],
-    ["method", "initialize"]
-  ]
+  "tags": [["p", "<provider-pubkey>"]]
 }
 ```
 
 - Tags:
   - `p`: Provider public key, to target all the servers from a provider
-  - `method`: Method name
 
 #### Server Initialization Response
 
@@ -322,14 +312,14 @@ This notification completes the initialization process and signals to the server
 
 ## Capability Operations
 
-After discover a server publicly, or initialization, clients can interact with server capabilities, even if the server is public, and its exposing capabilities publicly, you can still requesting list tools, resources, prompts, in order to use pagination if necessary
+After discover a server publicly, or initialization, clients can interact with server capabilities.
 
 ### List Operations
 
 All list operations follow the same structure described by MCP, with the specific capability type indicated in the method name.
 
 - Tags:
-  - `p`: Provider public key, to target all the servers from a provider
+  - `p`: Provider public key
 
 #### List Request Template
 
@@ -426,7 +416,7 @@ For the rest of capabilities (resources, prompts, completions, ping, etc) the `c
 
 ### Capability Pricing
 
-CTXVM supports pricing for capabilities through the use of `cap` tags in capability announcement or list events.
+ContextVM supports pricing for capabilities through the use of `cap` tags in capability announcement or list events.
 
 #### Pricing Tag Format
 
@@ -497,22 +487,20 @@ When a capability has pricing information, clients and servers should handle pay
 
 1. **Request**: Client sends a capability request to the server
 2. **Invoice Generation**: Server sends a `notifications/payment_required` notification with a payment request (e.g., Lightning Network invoice, Cashu PaymentRequest, Payment gateway URL, etc.)
-3. **Payment Verification**: Client pays
+3. **Payment Verification**: Client pays and the server verifies the payment
 4. **Capability Access**: Once payment is verified, the server processes the capability request, and responds with the result
 
 Payment verification is handled by the server and can be implemented using Lightning Network zaps (NIP-57) or other payment methods.
 
 ## Encryption
 
-### Overview
+ContextVM supports optional end-to-end encryption for enhanced privacy and security. This feature leverages a simplified version of NIP-17 (Private Direct Messages) for secure message encryption and NIP-59 (Gift Wrap) pattern with no 'rumor' with NIP-59 gift wrapping for metadata protection, ensuring that:
 
-CTXVM supports optional end-to-end encryption for enhanced privacy and security using the Nostr protocol's encryption standards. This feature leverages a simplified version of NIP-17 (Private Direct Messages) for secure message encryption and NIP-59 (Gift Wrap) for metadata protection, ensuring that:
-
-1. **Message Content Privacy**: All CTXVM message content is encrypted using NIP-44 encryption
+1. **Message Content Privacy**: All ContextVM message content is encrypted using NIP-44 encryption
 2. **Metadata Protection**: Gift wrapping hides participant identities, timestamps, and message patterns
 3. **Selective Encryption**: Clients and servers can negotiate encryption on a per-session basis
 
-Encryption in CTXVM maintains full compatibility with the standard protocol while adding an additional privacy layer. When encryption is enabled, all kind 25910 events are encrypted using the NIP-17/NIP-59 pattern, while replaceable events (server announcements and capability lists) remain unencrypted for discoverability.
+Encryption in ContextVM maintains full compatibility with the standard protocol while adding an additional privacy layer. When encryption is enabled, all kind 25910 events are encrypted using the NIP-17/NIP-59 pattern, while replaceable events (server announcements and capability lists) remain unencrypted for discoverability.
 
 ### Encryption Support Discovery
 
@@ -537,11 +525,11 @@ Clients can discover encryption support by:
 2. **Direct Discovery**: Check for the presence of the `support_encryption` tag in initialization responses
 3. **Encrypted Handshake**: Attempt an encrypted direct discovery, and wait for and encrypted response from the server
 
-When encryption is enabled, CTXVM messages follow a simplified NIP-17 pattern with no 'rumor' with NIP-59 gift wrapping.
+When encryption is enabled, ContextVM messages follow a simplified NIP-17 pattern with no 'rumor' with NIP-59 gift wrapping.
 
 #### 1. Request Preparation
 
-The request is prepared as usual:
+The request is prepared as usual, and should be signed:
 
 ```json
 {
@@ -559,7 +547,8 @@ The request is prepared as usual:
       }
     }
   },
-  "tags": [["p", "<provider-pubkey>"]]
+  "tags": [["p", "<provider-pubkey>"]],
+  "sig": "<signature>"
 }
 ```
 
@@ -581,11 +570,17 @@ The request is converted into a JSON string and gift-wrapped (kind 1059) with a 
 
 Server responses follow the same pattern. The response is converted into a JSON string and gift-wrapped (kind 1059) with a random key, following NIP-44 encryption.
 
-The decrypted inner content contains the standard CTXVM response format.
+The decrypted inner content contains the standard ContextVM response format. The id field used in responses should match the inner id field used in requests, not the id of the gift-wrap event.
+
+#### Why a simplified NIP-17/NIP-59 pattern?
+
+The standard implementation of NIP-17 and NIP-59 is complex and designed for private direct messages that are meant to persist in relays. Therefore, the standard uses an extra layer of encryption to prevent leakage of the original message if an attacker decrypts it. This involves a 'rumor' - an unsigned event embedded in a 'seal' event. The 'rumor' represents the original message, and because it lacks a signature, it cannot be leaked to relays as it is an invalid Nostr event. The 'seal' serves as the signature for the 'rumor'.
+
+In contrast, ContextVM uses ephemeral events that are not intended to be stored in relays, so the 'rumor' and 'seal' events are unnecessary, but still leveraging the metadata leakage protection of NIP-59 gift wrapping.
 
 ## Notifications
 
-All notifications in CTXVM follow the standard MCP notification format and conventions, using the unified kind 25910 event type. This includes notifications for payment requests, progress updates, and all other server-to-client or client-to-server communications.
+All notifications in ContextVM follow the standard MCP notification format and conventions, using the unified kind 25910 event type. This includes notifications for payment requests, progress updates, and all other server-to-client or client-to-server communications.
 
 Notifications are constructed according to the MCP notification template. The direction is determined by the `p` tag: client-to-server notifications are signed by the client's pubkey and use the server's pubkey as the `p` tag; server-to-client notifications are signed by the server's provider pubkey and use the client's pubkey as the `p` tag.
 
