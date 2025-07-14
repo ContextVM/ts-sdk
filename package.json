@@ -18,64 +18,28 @@
     "ctxvm",
     "nostr",
     "modelcontextprotocol",
-    "mcp"
+    "mcp",
+    "ai",
+    "llm"
   ],
-  "bin": {
-    "mcp-nostr-gateway": "./dist/esm/cli/mcp-nostr-gateway.js",
-    "mcp-nostr-proxy": "./dist/esm/cli/mcp-nostr-proxy.js"
-  },
   "exports": {
-    ".": {
-      "import": "./dist/esm/index.js",
-      "require": "./dist/cjs/index.js"
-    },
-    "./core": {
-      "import": "./dist/esm/core/index.js",
-      "require": "./dist/cjs/core/index.js"
-    },
-    "./core/*": {
-      "import": "./dist/esm/core/*.js",
-      "require": "./dist/cjs/core/*.js"
-    },
-    "./relay": {
-      "import": "./dist/esm/relay/index.js",
-      "require": "./dist/cjs/relay/index.js"
-    },
-    "./relay/*": {
-      "import": "./dist/esm/relay/*.js",
-      "require": "./dist/cjs/relay/*.js"
-    },
-    "./signer": {
-      "import": "./dist/esm/signer/index.js",
-      "require": "./dist/cjs/signer/index.js"
-    },
-    "./signer/*": {
-      "import": "./dist/esm/signer/*.js",
-      "require": "./dist/cjs/signer/*.js"
-    },
-    "./gateway": {
-      "import": "./dist/esm/gateway/index.js",
-      "require": "./dist/cjs/gateway/index.js"
-    },
-    "./proxy": {
-      "import": "./dist/esm/proxy/index.js",
-      "require": "./dist/cjs/proxy/index.js"
-    }
+    ".": "./dist/esm/index.js",
+    "./core": "./dist/esm/core/index.js",
+    "./core/*": "./dist/esm/core/*.js",
+    "./relay": "./dist/esm/relay/index.js",
+    "./relay/*": "./dist/esm/relay/*.js",
+    "./signer": "./dist/esm/signer/index.js",
+    "./signer/*": "./dist/esm/signer/*.js",
+    "./gateway": "./dist/esm/gateway/index.js",
+    "./proxy": "./dist/esm/proxy/index.js"
   },
-  "typesVersions": {
-    "*": {
-      "*": [
-        "./dist/esm/*"
-      ]
-    }
-  },
+  "types": "./dist/esm/index.d.ts",
   "files": [
-    "dist"
+    "dist/esm"
   ],
   "scripts": {
-    "build": "bun run build:esm && bun run build:cjs",
+    "build": "bun run build:esm",
     "build:esm": "mkdir -p dist/esm && echo '{\"type\": \"module\"}' > dist/esm/package.json && bun tsc -p tsconfig.prod.json",
-    "build:cjs": "mkdir -p dist/cjs && echo '{\"type\": \"commonjs\"}' > dist/cjs/package.json && bun tsc -p tsconfig.cjs.json",
     "lint": "eslint src/",
     "test": "bun tests",
     "fmt": "bun prettier --write ."

@@ -102,7 +102,6 @@ export class NostrMCPGateway {
     }
   }
 
-
   /**
    * Handles errors from the Nostr transport.
    * @param error The error that occurred.

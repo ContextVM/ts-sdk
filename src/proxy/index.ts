@@ -47,7 +47,10 @@ export class NostrMCPProxy {
     // Set up message handlers
     this.setupEventHandlers();
     // Start both transports
-    await Promise.all([this.mcpHostTransport.start(), this.nostrTransport.start()]);
+    await Promise.all([
+      this.mcpHostTransport.start(),
+      this.nostrTransport.start(),
+    ]);
 
     console.log('NostrMCPProxy started.');
   }
