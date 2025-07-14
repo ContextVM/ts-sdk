@@ -99,7 +99,7 @@ describe('NostrTransport Encryption', () => {
       EncryptionMode.OPTIONAL,
     );
 
-    await expect(client.connect(clientNostrTransport)).resolves.toBeUndefined();
+    expect(client.connect(clientNostrTransport)).resolves.toBeUndefined();
 
     await client.close();
     await server.close();
@@ -122,7 +122,7 @@ describe('NostrTransport Encryption', () => {
       EncryptionMode.REQUIRED,
     );
 
-    await expect(client.connect(clientNostrTransport)).resolves.toBeUndefined();
+    expect(client.connect(clientNostrTransport)).resolves.toBeUndefined();
 
     await client.close();
     await server.close();
@@ -145,7 +145,7 @@ describe('NostrTransport Encryption', () => {
       EncryptionMode.OPTIONAL,
     );
 
-    await expect(client.connect(clientNostrTransport)).resolves.toBeUndefined();
+    expect(client.connect(clientNostrTransport)).resolves.toBeUndefined();
 
     await client.close();
     await server.close();
@@ -168,7 +168,7 @@ describe('NostrTransport Encryption', () => {
       EncryptionMode.REQUIRED,
     );
 
-    await expect(client.connect(clientNostrTransport)).resolves.toBeUndefined();
+    expect(client.connect(clientNostrTransport)).resolves.toBeUndefined();
 
     await client.close();
     await server.close();
@@ -196,7 +196,7 @@ describe('NostrTransport Encryption', () => {
       setTimeout(() => resolve('timeout'), 2000),
     );
 
-    await expect(Promise.race([connectPromise, timeoutPromise])).resolves.toBe(
+    expect(Promise.race([connectPromise, timeoutPromise])).resolves.toBe(
       'timeout',
     );
 
@@ -221,7 +221,7 @@ describe('NostrTransport Encryption', () => {
       EncryptionMode.DISABLED,
     );
 
-    await expect(client.connect(clientNostrTransport)).resolves.toBeUndefined();
+    expect(client.connect(clientNostrTransport)).resolves.toBeUndefined();
 
     await client.close();
     await server.close();
@@ -251,7 +251,7 @@ describe('NostrTransport Encryption', () => {
       setTimeout(() => resolve('timeout'), 2000),
     );
 
-    await expect(Promise.race([connectPromise, timeoutPromise])).resolves.toBe(
+    expect(Promise.race([connectPromise, timeoutPromise])).resolves.toBe(
       'timeout',
     );
 

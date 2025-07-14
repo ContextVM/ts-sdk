@@ -163,6 +163,7 @@ export class NostrServerTransport
    * @param message The JSON-RPC response containing the announcement data.
    */
   private async announcer(message: JSONRPCResponse): Promise<void> {
+    const recipientPubkey = await this.getPublicKey();
     const commonTags = [
       ...(this.serverInfo?.name
         ? [[NOSTR_TAGS.NAME, this.serverInfo.name]]
@@ -173,85 +174,41 @@ export class NostrServerTransport
       ...(this.serverInfo?.picture
         ? [[NOSTR_TAGS.PICTURE, this.serverInfo.picture]]
         : []),
-      ...(this.encryptionMode === EncryptionMode.OPTIONAL ||
-      this.encryptionMode === EncryptionMode.REQUIRED
+      ...(this.encryptionMode !== EncryptionMode.DISABLED
         ? [[NOSTR_TAGS.SUPPORT_ENCRYPTION]]
         : []),
     ];
 
-    const recipientPubkey = await this.getPublicKey();
+    const announcementMapping = [
+      {
+        schema: InitializeResultSchema,
+        kind: SERVER_ANNOUNCEMENT_KIND,
+        tags: commonTags,
+      },
+      { schema: ListToolsResultSchema, kind: TOOLS_LIST_KIND, tags: [] },
+      {
+        schema: ListResourcesResultSchema,
+        kind: RESOURCES_LIST_KIND,
+        tags: [],
+      },
+      {
+        schema: ListResourceTemplatesResultSchema,
+        kind: RESOURCETEMPLATES_LIST_KIND,
+        tags: [],
+      },
+      { schema: ListPromptsResultSchema, kind: PROMPTS_LIST_KIND, tags: [] },
+    ];
 
-    if (InitializeResultSchema.safeParse(message.result).success) {
-      await this.sendMcpMessage(
-        message.result as JSONRPCMessage,
-        recipientPubkey,
-        SERVER_ANNOUNCEMENT_KIND,
-        commonTags,
-        false,
-      );
-    } else if (ListToolsResultSchema.safeParse(message.result).success) {
-      await this.sendMcpMessage(
-        message.result as JSONRPCMessage,
-        recipientPubkey,
-        TOOLS_LIST_KIND,
-        [],
-        false,
-      );
-    } else if (ListResourcesResultSchema.safeParse(message.result).success) {
-      await this.sendMcpMessage(
-        message.result as JSONRPCMessage,
-        recipientPubkey,
-        RESOURCES_LIST_KIND,
-        [],
-        false,
-      );
-    } else if (
-      ListResourceTemplatesResultSchema.safeParse(message.result).success
-    ) {
-      await this.sendMcpMessage(
-        message.result as JSONRPCMessage,
-        recipientPubkey,
-        RESOURCETEMPLATES_LIST_KIND,
-        [],
-        false,
-      );
-    } else if (ListPromptsResultSchema.safeParse(message.result).success) {
-      await this.sendMcpMessage(
-        message.result as JSONRPCMessage,
-        recipientPubkey,
-        PROMPTS_LIST_KIND,
-        [],
-        false,
-      );
-    }
-  }
-
-  /**
-   * Handles incoming messages with unified session and request management.
-   * @param clientPubkey The public key of the client.
-   * @param eventId The Nostr event ID.
-   * @param message The MCP message received from the client.
-   */
-  private handleIncomingMessage(
-    clientPubkey: string,
-    eventId: string,
-    message: JSONRPCMessage,
-    isEncrypted: boolean,
-  ): void {
-    const now = Date.now();
-    const session = this.getOrCreateClientSession(
-      clientPubkey,
-      now,
-      isEncrypted,
-    );
-
-    // Update session activity
-    session.lastActivity = now;
-    // Handle different message types intelligently
-    if (isJSONRPCRequest(message)) {
-      this.handleIncomingRequest(session, eventId, message);
-    } else if (isJSONRPCNotification(message)) {
-      this.handleIncomingNotification(session, message);
+    for (const mapping of announcementMapping) {
+      if (mapping.schema.safeParse(message.result).success) {
+        await this.sendMcpMessage(
+          message.result as JSONRPCMessage,
+          recipientPubkey,
+          mapping.kind,
+          mapping.tags,
+        );
+        break;
+      }
     }
   }
 
@@ -374,8 +331,7 @@ export class NostrServerTransport
     if (
       isJSONRPCResponse(response) &&
       InitializeResultSchema.safeParse(response.result).success &&
-      (this.encryptionMode === EncryptionMode.OPTIONAL ||
-        this.encryptionMode === EncryptionMode.REQUIRED)
+      session.isEncrypted
     ) {
       tags.push([NOSTR_TAGS.SUPPORT_ENCRYPTION]);
     }
@@ -480,58 +436,87 @@ export class NostrServerTransport
    * @param event The incoming Nostr event.
    */
   private async processIncomingEvent(event: NostrEvent): Promise<void> {
-    let currentEvent = event;
-    let isEncrypted = false;
-
     if (event.kind === GIFT_WRAP_KIND) {
-      if (this.encryptionMode === EncryptionMode.DISABLED) {
-        console.warn(
-          `Received encrypted message from ${event.pubkey} but encryption is disabled. Ignoring.`,
-        );
-        return;
+      await this.handleEncryptedEvent(event);
+    } else {
+      this.handleUnencryptedEvent(event);
+    }
+  }
+
+  /**
+   * Handles encrypted (gift-wrapped) events.
+   * @param event The incoming gift-wrapped Nostr event.
+   */
+  private async handleEncryptedEvent(event: NostrEvent): Promise<void> {
+    if (this.encryptionMode === EncryptionMode.DISABLED) {
+      console.warn(
+        `Received encrypted message from ${event.pubkey} but encryption is disabled. Ignoring.`,
+      );
+      return;
+    }
+    try {
+      const secretKey = await this.signer.getSecretKey();
+      if (!secretKey) {
+        throw new Error('Server secret key is unavailable for decryption.');
       }
-      try {
-        const secretKey = await this.signer.getSecretKey();
-        if (!secretKey) {
-          throw new Error('Server secret key is unavailable for decryption.');
-        }
-        const decryptedJson = decryptMessage(event, secretKey);
-        currentEvent = JSON.parse(decryptedJson) as NostrEvent;
-        isEncrypted = true;
-      } catch (error) {
-        console.error('Error handling encrypted message:', error);
-        this.onerror?.(
-          error instanceof Error
-            ? error
-            : new Error('Failed to handle encrypted Nostr event'),
-        );
-        return;
-      }
-    } else if (this.encryptionMode === EncryptionMode.REQUIRED) {
+      const decryptedJson = decryptMessage(event, secretKey);
+      const currentEvent = JSON.parse(decryptedJson) as NostrEvent;
+      this.authorizeAndProcessEvent(currentEvent, true);
+    } catch (error) {
+      this.onerror?.(
+        error instanceof Error
+          ? error
+          : new Error('Failed to handle encrypted Nostr event'),
+      );
+    }
+  }
+
+  /**
+   * Handles unencrypted events.
+   * @param event The incoming Nostr event.
+   */
+  private handleUnencryptedEvent(event: NostrEvent): void {
+    if (this.encryptionMode === EncryptionMode.REQUIRED) {
       console.warn(
         `Received unencrypted message from ${event.pubkey} but encryption is required. Ignoring.`,
       );
       return;
     }
+    this.authorizeAndProcessEvent(event, false);
+  }
 
-    // After decryption (if applicable), check allowed public keys
+  /**
+   * Common logic for authorizing and processing an event.
+   * @param event The event to process.
+   * @param isEncrypted Whether the original event was encrypted.
+   */
+  private authorizeAndProcessEvent(
+    event: NostrEvent,
+    isEncrypted: boolean,
+  ): void {
     if (
       this.allowedPublicKeys?.length &&
-      !this.allowedPublicKeys.includes(currentEvent.pubkey)
+      !this.allowedPublicKeys.includes(event.pubkey)
     ) {
-      console.warn(
-        `Unauthorized message from ${currentEvent.pubkey}. Ignoring.`,
-      );
+      console.warn(`Unauthorized message from ${event.pubkey}. Ignoring.`);
       return;
     }
 
-    const mcpMessage = this.convertNostrEventToMcpMessage(currentEvent);
-    this.handleIncomingMessage(
-      currentEvent.pubkey,
-      currentEvent.id,
-      mcpMessage,
+    const mcpMessage = this.convertNostrEventToMcpMessage(event);
+    const now = Date.now();
+    const session = this.getOrCreateClientSession(
+      event.pubkey,
+      now,
       isEncrypted,
     );
+    session.lastActivity = now;
+
+    if (isJSONRPCRequest(mcpMessage)) {
+      this.handleIncomingRequest(session, event.id, mcpMessage);
+    } else if (isJSONRPCNotification(mcpMessage)) {
+      this.handleIncomingNotification(session, mcpMessage);
+    }
+
     this.onmessage?.(mcpMessage);
   }
 

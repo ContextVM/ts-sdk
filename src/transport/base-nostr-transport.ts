@@ -123,7 +123,6 @@ export abstract class BaseNostrTransport {
     tags?: NostrEvent['tags'],
     forceEncryption?: boolean,
   ): Promise<string> {
-    console.error('Sending message', kind, message);
     const unencryptedKinds = [
       SERVER_ANNOUNCEMENT_KIND,
       TOOLS_LIST_KIND,
@@ -133,26 +132,20 @@ export abstract class BaseNostrTransport {
     ];
     const shouldEncrypt =
       (!unencryptedKinds.includes(kind) || forceEncryption) &&
-      (this.encryptionMode === EncryptionMode.REQUIRED ||
-        this.encryptionMode === EncryptionMode.OPTIONAL);
+      this.encryptionMode !== EncryptionMode.DISABLED;
+
+    const event = await this.createSignedNostrEvent(message, kind, tags);
 
     if (shouldEncrypt) {
-      const signedEvent = await this.createSignedNostrEvent(
-        message,
-        kind,
-        tags,
-      );
       const encryptedEvent = encryptMessage(
-        JSON.stringify(signedEvent),
+        JSON.stringify(event),
         recipientPublicKey,
       );
       await this.publishEvent(encryptedEvent);
-      return signedEvent.id;
     } else {
-      const event = await this.createSignedNostrEvent(message, kind, tags);
       await this.publishEvent(event);
-      return event.id;
     }
+    return event.id;
   }
 
   /**

@@ -58,13 +58,7 @@ export class NostrClientTransport
     const pubkey = await this.getPublicKey();
     const filters = this.createSubscriptionFilters(pubkey);
 
-    await this.subscribe(filters, async (event: NostrEvent) => {
-      if (event.kind === GIFT_WRAP_KIND) {
-        await this.handleEncryptedMessage(event);
-      } else {
-        this.handleRegularMessage(event);
-      }
-    });
+    await this.subscribe(filters, this.processIncomingEvent.bind(this));
   }
 
   /**
@@ -80,19 +74,18 @@ export class NostrClientTransport
    * @param message The JSON-RPC request or response to send.
    */
   public async send(message: JSONRPCMessage): Promise<void> {
-    const eventId = await this.sendWithEventId(message);
+    const eventId = await this._sendInternal(message);
     if (eventId) {
       this.pendingRequestIds.add(eventId);
     }
   }
 
   /**
-   * Sends a JSON-RPC message over the Nostr transport and returns the event ID.
-   * If encryption is optional, it attempts an encrypted request first and falls back to unencrypted.
-   * @param message The JSON-RPC request or response to send.
+   * Internal method to send a JSON-RPC message and get the resulting event ID.
+   * @param message The JSON-RPC message to send.
    * @returns The ID of the published Nostr event.
    */
-  public async sendWithEventId(message: JSONRPCMessage): Promise<string> {
+  private async _sendInternal(message: JSONRPCMessage): Promise<string> {
     const tags = this.createRecipientTags(this.serverPubkey);
 
     return this.sendMcpMessage(
@@ -100,61 +93,33 @@ export class NostrClientTransport
       this.serverPubkey,
       CTXVM_MESSAGES_KIND,
       tags,
-      this.encryptionMode === EncryptionMode.REQUIRED,
     );
   }
 
   /**
-   * Handles encrypted messages by decrypting them and processing the content.
+   * Processes incoming Nostr events, routing them to the correct handler.
    */
-  private async handleEncryptedMessage(event: NostrEvent): Promise<void> {
+  private async processIncomingEvent(event: NostrEvent): Promise<void> {
     try {
-      const secretKey = await this.signer.getSecretKey();
-      if (!secretKey) {
-        throw new Error('Secret key is not available for decryption.');
+      let nostrEvent = event;
+      // Handle encrypted messages
+      if (event.kind === GIFT_WRAP_KIND) {
+        const secretKey = await this.signer.getSecretKey();
+        if (!secretKey) {
+          throw new Error('Secret key is not available for decryption.');
+        }
+        const decryptedContent = decryptMessage(event, secretKey);
+        nostrEvent = JSON.parse(decryptedContent) as NostrEvent;
       }
-      const decryptedContent = decryptMessage(event, secretKey);
-      const nostrEvent = JSON.parse(decryptedContent) as NostrEvent;
-      this.handleRegularMessage(nostrEvent);
-    } catch (error) {
-      console.error('Error handling encrypted message:', error);
-      this.onerror?.(
-        error instanceof Error
-          ? error
-          : new Error('Failed to handle encrypted message'),
-      );
-    }
-  }
 
-  /**
-   * Handles regular (non-encrypted) messages.
-   */
-  private handleRegularMessage(event: NostrEvent): void {
-    try {
-      const eTag = getNostrEventTag(event.tags, 'e');
-      const mcpMessage = this.convertNostrEventToMcpMessage(event);
+      // Process the resulting event
+      const mcpMessage = this.convertNostrEventToMcpMessage(nostrEvent);
+      const eTag = getNostrEventTag(nostrEvent.tags, 'e');
 
       if (eTag) {
-        const eventId = eTag;
-        if (this.pendingRequestIds.has(eventId)) {
-          this.onmessage?.(mcpMessage);
-          this.pendingRequestIds.delete(eventId);
-        } else {
-          console.warn(
-            `Received Nostr event with unexpected 'e' tag: ${eventId}.`,
-          );
-        }
+        this.handleResponse(eTag, mcpMessage);
       } else {
-        try {
-          NotificationSchema.parse(mcpMessage);
-          this.onmessage?.(mcpMessage);
-        } catch (error) {
-          this.onerror?.(
-            error instanceof Error
-              ? error
-              : new Error('Failed to handle incoming Nostr event'),
-          );
-        }
+        this.handleNotification(mcpMessage);
       }
     } catch (error) {
       console.error('Error handling incoming Nostr event:', error);
@@ -162,6 +127,42 @@ export class NostrClientTransport
         error instanceof Error
           ? error
           : new Error('Failed to handle incoming Nostr event'),
+      );
+    }
+  }
+
+  /**
+   * Handles response messages by correlating them with pending requests.
+   * @param correlatedEventId The event ID from the 'e' tag.
+   * @param mcpMessage The incoming MCP message.
+   */
+  private handleResponse(
+    correlatedEventId: string,
+    mcpMessage: JSONRPCMessage,
+  ): void {
+    if (this.pendingRequestIds.has(correlatedEventId)) {
+      this.onmessage?.(mcpMessage);
+      this.pendingRequestIds.delete(correlatedEventId);
+    } else {
+      console.warn(
+        `Received Nostr event with unexpected 'e' tag: ${correlatedEventId}.`,
+      );
+    }
+  }
+
+  /**
+   * Handles notification messages.
+   * @param mcpMessage The incoming MCP message.
+   */
+  private handleNotification(mcpMessage: JSONRPCMessage): void {
+    try {
+      NotificationSchema.parse(mcpMessage);
+      this.onmessage?.(mcpMessage);
+    } catch (error) {
+      this.onerror?.(
+        error instanceof Error
+          ? error
+          : new Error('Failed to handle incoming notification'),
       );
     }
   }
