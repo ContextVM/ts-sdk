@@ -28,7 +28,6 @@ describe('Proxy-Gateway E2E Test (Without Mock Responses)', () => {
   // Generate keys for gateway and proxy
   const gatewayPrivateKey = TEST_PRIVATE_KEY;
   const gatewayPublicKey = getPublicKey(hexToBytes(gatewayPrivateKey));
-  const gatewayIdentifier = 'test-gateway-server';
 
   const proxyPrivateKey = bytesToHex(generateSecretKey());
 
@@ -110,7 +109,6 @@ describe('Proxy-Gateway E2E Test (Without Mock Responses)', () => {
         RELAY_URL: relayUrl,
         CLIENT_PRIVATE_KEY: proxyPrivateKey,
         SERVER_PUBKEY: gatewayPublicKey,
-        SERVER_IDENTIFIER: gatewayIdentifier,
       },
     });
   };

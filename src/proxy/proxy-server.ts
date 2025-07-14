@@ -13,7 +13,6 @@ async function main(): Promise<void> {
   const relayUrl = process.env.RELAY_URL || 'ws://localhost:7777';
   const clientPrivateKey = process.env.CLIENT_PRIVATE_KEY;
   const serverPubkey = process.env.SERVER_PUBKEY;
-  const serverIdentifier = process.env.SERVER_IDENTIFIER;
 
   if (!clientPrivateKey) {
     console.error('CLIENT_PRIVATE_KEY environment variable is required');
@@ -22,11 +21,6 @@ async function main(): Promise<void> {
 
   if (!serverPubkey) {
     console.error('SERVER_PUBKEY environment variable is required');
-    process.exit(1);
-  }
-
-  if (!serverIdentifier) {
-    console.error('SERVER_IDENTIFIER environment variable is required');
     process.exit(1);
   }
 
@@ -44,7 +38,6 @@ async function main(): Promise<void> {
       signer,
       relayHandler: relayPool,
       serverPubkey,
-      serverIdentifier,
     },
   });
 
