@@ -1,5 +1,5 @@
 {
-  "name": "@ctxvm/sdk",
+  "name": "@contextvm/sdk",
   "version": "0.1.0",
   "description": "CtxVM SDK for JavaScript/TypeScript",
   "license": "MIT",
@@ -45,6 +45,7 @@
     "fmt": "bun prettier --write ."
   },
   "devDependencies": {
+    "@changesets/cli": "^2.29.5",
     "@eslint/js": "^9.8.0",
     "@types/bun": "latest",
     "eslint": "^9.8.0",
