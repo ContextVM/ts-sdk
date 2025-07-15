@@ -42,7 +42,6 @@ export interface NostrServerTransportOptions extends BaseNostrTransportOptions {
   serverInfo?: ServerInfo;
   isPublicServer?: boolean;
   allowedPublicKeys?: string[];
-  encryptionMode?: EncryptionMode;
 }
 
 /**

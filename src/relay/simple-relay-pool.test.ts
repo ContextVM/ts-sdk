@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import { bytesToHex } from '@noble/hashes/utils';
-import type { Subprocess } from 'bun';
+import { sleep, type Subprocess } from 'bun';
 import {
   generateSecretKey,
   getPublicKey,
@@ -24,7 +24,7 @@ describe('RelayPool Integration', () => {
       },
     });
     // Wait for the relay to start
-    await Bun.sleep(100);
+    await sleep(100);
   });
 
   afterAll(() => {

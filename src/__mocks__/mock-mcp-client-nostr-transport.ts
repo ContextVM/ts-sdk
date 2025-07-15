@@ -4,6 +4,7 @@ import { bytesToHex } from 'nostr-tools/utils';
 import { generateSecretKey } from 'nostr-tools';
 import { PrivateKeySigner } from '../signer/private-key-signer.js';
 import { SimpleRelayPool } from '../relay/simple-relay-pool.js';
+import { sleep } from '../core/utils/utils.js';
 
 const client = new Client({
   name: `mock-client`,
@@ -19,7 +20,7 @@ const transport = new NostrClientTransport({
 
 await client.connect(transport);
 await client.listTools();
-await Bun.sleep(1000);
+await sleep(1000);
 await client.callTool({
   name: 'add',
   arguments: {
@@ -27,5 +28,5 @@ await client.callTool({
     b: 2,
   },
 });
-await Bun.sleep(1000);
+await sleep(1000);
 await client.ping();

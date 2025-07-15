@@ -6,7 +6,7 @@ import {
   test,
   expect,
 } from 'bun:test';
-import type { Subprocess } from 'bun';
+import { sleep, type Subprocess } from 'bun';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { StdioClientTransport as StdioClientTransportForGateway } from '@modelcontextprotocol/sdk/client/stdio.js';
@@ -46,7 +46,7 @@ describe('Proxy-Gateway E2E Test (Without Mock Responses)', () => {
     });
 
     // Wait for relay to start
-    await Bun.sleep(100);
+    await sleep(100);
 
     // Create the gateway with the mock MCP server transport
     const mcpServerTransport = new StdioClientTransportForGateway({
@@ -73,7 +73,7 @@ describe('Proxy-Gateway E2E Test (Without Mock Responses)', () => {
 
   afterEach(async () => {
     // Give some time for any client connections to close properly
-    await Bun.sleep(100);
+    await sleep(100);
 
     // // Clear the mock relay's event cache to prevent cross-test contamination
     if (relayUrl) {
@@ -97,7 +97,7 @@ describe('Proxy-Gateway E2E Test (Without Mock Responses)', () => {
     relayProcess?.kill();
 
     // Wait for cleanup
-    await Bun.sleep(100);
+    await sleep(100);
   });
 
   const getProxyTransport = () => {

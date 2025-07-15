@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, test, expect } from 'bun:test';
-import type { Subprocess } from 'bun';
+import { sleep, type Subprocess } from 'bun';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { TEST_PRIVATE_KEY } from '../__mocks__/fixtures.js';
@@ -34,7 +34,7 @@ describe('NostrMCPGateway End-to-End Test', () => {
     });
 
     // Wait for relay to start
-    await Bun.sleep(100);
+    await sleep(100);
 
     // Create the gateway with the mock server transport
     const mcpServerTransport = new StdioClientTransport({
@@ -59,7 +59,7 @@ describe('NostrMCPGateway End-to-End Test', () => {
     console.log('Gateway started, waiting for readiness...');
 
     // Wait for gateway to be ready
-    await Bun.sleep(100);
+    await sleep(100);
   });
 
   afterAll(async () => {
@@ -72,7 +72,7 @@ describe('NostrMCPGateway End-to-End Test', () => {
     relayProcess?.kill();
 
     // Wait for cleanup
-    await Bun.sleep(100);
+    await sleep(100);
   });
 
   const createClientTransport = (privateKey: string): NostrClientTransport => {

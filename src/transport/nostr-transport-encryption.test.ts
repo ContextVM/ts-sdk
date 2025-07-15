@@ -6,7 +6,7 @@ import {
   test,
   expect,
 } from 'bun:test';
-import type { Subprocess } from 'bun';
+import { sleep, type Subprocess } from 'bun';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { NostrServerTransport } from './nostr-server-transport.js';
 import { NostrClientTransport } from './nostr-client-transport.js';
@@ -32,7 +32,7 @@ describe('NostrTransport Encryption', () => {
       stdout: 'inherit',
       stderr: 'inherit',
     });
-    await Bun.sleep(100);
+    await sleep(100);
   });
 
   afterEach(async () => {
@@ -48,7 +48,7 @@ describe('NostrTransport Encryption', () => {
 
   afterAll(async () => {
     relayProcess?.kill();
-    await Bun.sleep(100);
+    await sleep(100);
   });
 
   // Helper to create a client and its transport

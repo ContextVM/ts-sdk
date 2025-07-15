@@ -1,6 +1,7 @@
 import { SimplePool, type Filter, type NostrEvent } from 'nostr-tools';
 import type { SubCloser } from 'nostr-tools/abstract-pool';
 import { RelayHandler } from '../core/interfaces.js';
+import { sleep } from 'bun';
 
 /**
  * A RelayHandler implementation that uses a SimplePool to manage connections and subscriptions.
@@ -31,7 +32,7 @@ export class SimpleRelayPool implements RelayHandler {
       relayUrls = this.relayUrls;
     }
     this.pool.close(relayUrls);
-    await Bun.sleep(100);
+    await sleep(100);
   }
 
   async publish(event: NostrEvent): Promise<void> {

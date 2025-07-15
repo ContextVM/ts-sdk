@@ -6,7 +6,7 @@ import {
   test,
   expect,
 } from 'bun:test';
-import type { Subprocess } from 'bun';
+import { sleep, type Subprocess } from 'bun';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { NostrServerTransport } from './nostr-server-transport.js';
 import { NostrClientTransport } from './nostr-client-transport.js';
@@ -33,7 +33,7 @@ describe('NostrServerTransport', () => {
       stdout: 'inherit',
       stderr: 'inherit',
     });
-    await Bun.sleep(100);
+    await sleep(100);
   });
 
   afterEach(async () => {
@@ -50,7 +50,7 @@ describe('NostrServerTransport', () => {
 
   afterAll(async () => {
     relayProcess?.kill();
-    await Bun.sleep(100);
+    await sleep(100);
   });
 
   // Test cases will go here
@@ -103,7 +103,7 @@ describe('NostrServerTransport', () => {
       },
     );
 
-    await Bun.sleep(100);
+    await sleep(100);
 
     expect(announcementEvent).toBeDefined();
     expect(announcementEvent!.kind).toBe(SERVER_ANNOUNCEMENT_KIND);
@@ -188,7 +188,7 @@ describe('NostrServerTransport', () => {
     );
 
     const timeoutPromise = new Promise<string>((resolve) => {
-      Bun.sleep(1000).then(() => {
+      sleep(1000).then(() => {
         resolve('timeout');
       });
     });
