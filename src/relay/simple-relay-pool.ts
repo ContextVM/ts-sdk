@@ -1,7 +1,7 @@
 import { SimplePool, type Filter, type NostrEvent } from 'nostr-tools';
 import type { SubCloser } from 'nostr-tools/abstract-pool';
 import { RelayHandler } from '../core/interfaces.js';
-import { sleep } from 'bun';
+import { sleep } from '../core/utils/utils.js';
 
 /**
  * A RelayHandler implementation that uses a SimplePool to manage connections and subscriptions.
