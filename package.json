@@ -1,8 +1,8 @@
 {
   "name": "@contextvm/sdk",
-  "version": "0.1.0",
+  "version": "0.1.2",
   "description": "CtxVM SDK for JavaScript/TypeScript",
-  "license": "MIT",
+  "license": "LGPL-3.0-1",
   "author": "ContextVM",
   "bugs": "https://github.com/ContextVM/ts-sdk/issues",
   "type": "module",
@@ -42,7 +42,8 @@
     "build:esm": "mkdir -p dist/esm && echo '{\"type\": \"module\"}' > dist/esm/package.json && bun tsc -p tsconfig.prod.json",
     "lint": "eslint src/",
     "test": "bun tests",
-    "fmt": "bun prettier --write ."
+    "fmt": "bun prettier --write .",
+    "publish": "bun run build && bun changeset publish"
   },
   "devDependencies": {
     "@changesets/cli": "^2.29.5",
