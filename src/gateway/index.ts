@@ -69,8 +69,8 @@ export class NostrMCPGateway {
 
     try {
       // Start both transports
-      await this.nostrServerTransport.start();
       await this.mcpServerTransport.start();
+      await this.nostrServerTransport.start();
 
       this.isRunning = true;
       console.log('NostrMCPGateway started successfully');

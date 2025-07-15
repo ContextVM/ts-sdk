@@ -52,6 +52,11 @@ describe('NostrMCPGateway End-to-End Test', () => {
       nostrTransportOptions: {
         signer: gatewaySigner,
         relayHandler: gatewayRelayHandler,
+        isPublicServer: true,
+        serverInfo: {
+          name: 'Test Server',
+          website: 'http://localhost',
+        },
       },
     });
 
