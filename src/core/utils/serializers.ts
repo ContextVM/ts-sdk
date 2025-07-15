@@ -1,4 +1,4 @@
-import type { Event as NostrEvent, UnsignedEvent } from 'nostr-tools';
+import type { NostrEvent, UnsignedEvent } from 'nostr-tools';
 import type { JSONRPCMessage } from '@modelcontextprotocol/sdk/types.js';
 
 /**

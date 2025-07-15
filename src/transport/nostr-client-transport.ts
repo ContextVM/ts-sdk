@@ -3,7 +3,6 @@ import {
   type JSONRPCMessage,
 } from '@modelcontextprotocol/sdk/types.js';
 import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js';
-import type { Event as NostrEvent } from 'nostr-tools';
 import {
   EncryptionMode,
   NostrSigner,
@@ -16,6 +15,7 @@ import {
 } from '../core/index.js';
 import { BaseNostrTransport } from './base-nostr-transport.js';
 import { getNostrEventTag } from '../core/utils/serializers.js';
+import { NostrEvent } from 'nostr-tools';
 
 /**
  * Options for configuring the NostrClientTransport.

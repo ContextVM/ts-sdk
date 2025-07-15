@@ -1,8 +1,9 @@
-import { nip44, type Event as NostrEvent } from 'nostr-tools';
+import { nip44 } from 'nostr-tools';
 import {
   finalizeEvent,
   generateSecretKey,
   getPublicKey,
+  NostrEvent,
 } from 'nostr-tools/pure';
 import { GIFT_WRAP_KIND, NOSTR_TAGS } from './constants.js';
 
