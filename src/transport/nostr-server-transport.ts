@@ -334,6 +334,7 @@ export class NostrServerTransport
     ) {
       tags.push([NOSTR_TAGS.SUPPORT_ENCRYPTION]);
     }
+
     await this.sendMcpMessage(
       response,
       targetClientPubkey,

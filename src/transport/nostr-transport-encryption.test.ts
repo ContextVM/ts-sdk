@@ -12,10 +12,11 @@ import { NostrServerTransport } from './nostr-server-transport.js';
 import { NostrClientTransport } from './nostr-client-transport.js';
 import { PrivateKeySigner } from '../signer/private-key-signer.js';
 import { SimpleRelayPool } from '../relay/simple-relay-pool.js';
-import { generateSecretKey, getPublicKey } from 'nostr-tools';
+import { generateSecretKey, getPublicKey, NostrEvent } from 'nostr-tools';
 import { bytesToHex, hexToBytes } from 'nostr-tools/utils';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { EncryptionMode } from '../core/interfaces.js';
+import { CTXVM_MESSAGES_KIND, GIFT_WRAP_KIND } from '../core/constants.js';
 
 const baseRelayPort = 7791;
 const relayUrl = `ws://localhost:${baseRelayPort}`;
@@ -258,4 +259,62 @@ describe('NostrTransport Encryption', () => {
     await client.close();
     await server.close();
   }, 5000);
+
+  test('should mirror the format of the request in EncryptionMode.OPTIONAL: client encryption is disabled', async () => {
+    const serverPrivateKey = bytesToHex(generateSecretKey());
+    const serverPublicKey = getPublicKey(hexToBytes(serverPrivateKey));
+    const clientPrivateKey = bytesToHex(generateSecretKey());
+    const collectedEvents: NostrEvent[] = [];
+    const { server, serverTransport } = createServerAndTransport(
+      serverPrivateKey,
+      EncryptionMode.OPTIONAL,
+    );
+    await server.connect(serverTransport);
+    await Bun.sleep(100);
+
+    const { client, clientNostrTransport } = createClientAndTransport(
+      clientPrivateKey,
+      serverPublicKey,
+      EncryptionMode.DISABLED,
+    );
+
+    const relayHandler = new SimpleRelayPool([relayUrl]);
+    relayHandler.subscribe([{ kinds: [CTXVM_MESSAGES_KIND] }], (event) => {
+      collectedEvents.push(event);
+    });
+    await client.connect(clientNostrTransport);
+    expect(collectedEvents.length).toBeGreaterThan(0);
+
+    await client.close();
+    await server.close();
+  }, 5000);
+
+  test('should mirror the format of the request in EncryptionMode.OPTIONAL: client encryption is required', async () => {
+    const serverPrivateKey = bytesToHex(generateSecretKey());
+    const serverPublicKey = getPublicKey(hexToBytes(serverPrivateKey));
+    const clientPrivateKey = bytesToHex(generateSecretKey());
+    const collectedEvents: NostrEvent[] = [];
+    const { server, serverTransport } = createServerAndTransport(
+      serverPrivateKey,
+      EncryptionMode.OPTIONAL,
+    );
+    await server.connect(serverTransport);
+    await Bun.sleep(100);
+
+    const { client, clientNostrTransport } = createClientAndTransport(
+      clientPrivateKey,
+      serverPublicKey,
+      EncryptionMode.REQUIRED,
+    );
+
+    const relayHandler = new SimpleRelayPool([relayUrl]);
+    relayHandler.subscribe([{ kinds: [GIFT_WRAP_KIND] }], (event) => {
+      collectedEvents.push(event);
+    });
+    await client.connect(clientNostrTransport);
+    expect(collectedEvents.length).toBeGreaterThan(0);
+
+    await client.close();
+    await server.close();
+  }, 10000);
 });

@@ -121,7 +121,7 @@ export abstract class BaseNostrTransport {
     recipientPublicKey: string,
     kind: number,
     tags?: NostrEvent['tags'],
-    forceEncryption?: boolean,
+    isEncrypted?: boolean,
   ): Promise<string> {
     const unencryptedKinds = [
       SERVER_ANNOUNCEMENT_KIND,
@@ -130,9 +130,19 @@ export abstract class BaseNostrTransport {
       RESOURCETEMPLATES_LIST_KIND,
       PROMPTS_LIST_KIND,
     ];
-    const shouldEncrypt =
-      (!unencryptedKinds.includes(kind) || forceEncryption) &&
-      this.encryptionMode !== EncryptionMode.DISABLED;
+
+    let shouldEncrypt: boolean = true;
+    if (unencryptedKinds.includes(kind)) {
+      shouldEncrypt = false;
+    } else {
+      if (this.encryptionMode === EncryptionMode.OPTIONAL) {
+        shouldEncrypt = isEncrypted ?? true;
+      } else if (this.encryptionMode === EncryptionMode.DISABLED) {
+        shouldEncrypt = false;
+      } else if (this.encryptionMode === EncryptionMode.REQUIRED) {
+        shouldEncrypt = true;
+      }
+    }
 
     const event = await this.createSignedNostrEvent(message, kind, tags);
 

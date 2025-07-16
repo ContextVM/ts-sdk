@@ -5,6 +5,7 @@ import { generateSecretKey } from 'nostr-tools';
 import { PrivateKeySigner } from '../signer/private-key-signer.js';
 import { SimpleRelayPool } from '../relay/simple-relay-pool.js';
 import { sleep } from '../core/utils/utils.js';
+import { EncryptionMode } from '../core/interfaces.js';
 
 const client = new Client({
   name: `mock-client`,
@@ -15,18 +16,20 @@ const transport = new NostrClientTransport({
   signer: new PrivateKeySigner(bytesToHex(generateSecretKey())),
   relayHandler: new SimpleRelayPool(['ws://localhost:10547']),
   serverPubkey:
-    'ada13b4dbc773890a5e8e468b72418b9fffb51c40b78236819a721971b14fed1',
+    '675ba0e7015d870e8581706f3acb22db74a9ed690f388f64c25459c77a1d1a85',
+  encryptionMode: EncryptionMode.DISABLED,
 });
 
 await client.connect(transport);
 await client.listTools();
 await sleep(1000);
-await client.callTool({
+const callTool = await client.callTool({
   name: 'add',
   arguments: {
     a: 1,
     b: 2,
   },
 });
+console.log(callTool);
 await sleep(1000);
 await client.ping();
