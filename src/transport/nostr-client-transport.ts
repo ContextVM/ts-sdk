@@ -104,11 +104,7 @@ export class NostrClientTransport
       let nostrEvent = event;
       // Handle encrypted messages
       if (event.kind === GIFT_WRAP_KIND) {
-        const secretKey = await this.signer.getSecretKey();
-        if (!secretKey) {
-          throw new Error('Secret key is not available for decryption.');
-        }
-        const decryptedContent = decryptMessage(event, secretKey);
+        const decryptedContent = await decryptMessage(event, this.signer);
         nostrEvent = JSON.parse(decryptedContent) as NostrEvent;
       }
 

@@ -42,6 +42,7 @@ export class NostrMCPGateway {
   private setupEventHandlers(): void {
     // Forward messages from Nostr to the MCP server, handling any potential errors.
     this.nostrServerTransport.onmessage = (message: JSONRPCMessage) => {
+      console.log('Received message from Nostr:', message);
       this.mcpServerTransport
         .send(message)
         .catch(this.handleServerError.bind(this));
@@ -51,6 +52,7 @@ export class NostrMCPGateway {
 
     // Forward messages from the MCP server to the Nostr transport, handling any potential errors.
     this.mcpServerTransport.onmessage = (message: JSONRPCMessage) => {
+      console.log('Received message from MCP server:', message);
       this.nostrServerTransport
         .send(message)
         .catch(this.handleNostrError.bind(this));

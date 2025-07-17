@@ -6,6 +6,7 @@ import {
   type UnsignedEvent,
 } from 'nostr-tools';
 import { NostrSigner } from '../core/interfaces.js';
+import { nip44 } from 'nostr-tools';
 
 /**
  * A signer that uses a private key to sign events.
@@ -21,10 +22,6 @@ export class PrivateKeySigner implements NostrSigner {
     this.publicKey = getPublicKey(this.privateKey);
   }
 
-  async getSecretKey(): Promise<Uint8Array> {
-    return this.privateKey;
-  }
-
   async getPublicKey(): Promise<string> {
     return this.publicKey;
   }
@@ -32,4 +29,25 @@ export class PrivateKeySigner implements NostrSigner {
   async signEvent(event: UnsignedEvent): Promise<NostrEvent> {
     return finalizeEvent(event, this.privateKey);
   }
+
+  /**
+   * NIP-44 encryption and decryption implementation
+   */
+  nip44 = {
+    encrypt: async (pubkey: string, plaintext: string): Promise<string> => {
+      const conversationKey = nip44.v2.utils.getConversationKey(
+        this.privateKey,
+        pubkey,
+      );
+      return nip44.v2.encrypt(plaintext, conversationKey);
+    },
+
+    decrypt: async (pubkey: string, ciphertext: string): Promise<string> => {
+      const conversationKey = nip44.v2.utils.getConversationKey(
+        this.privateKey,
+        pubkey,
+      );
+      return nip44.v2.decrypt(ciphertext, conversationKey);
+    },
+  };
 }

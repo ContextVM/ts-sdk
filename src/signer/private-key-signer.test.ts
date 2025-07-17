@@ -25,11 +25,24 @@ describe('PrivateKeySigner', () => {
     expect(await signer.getPublicKey()).toBe(publicKeyHex);
   });
 
-  test('getSecretKey() returns the correct private key', async () => {
-    const secretKey = await signer.getSecretKey();
-    expect(secretKey).toEqual(
-      Uint8Array.from(Buffer.from(privateKeyHex, 'hex')),
+  test('nip44 encrypt and decrypt work correctly', async () => {
+    const anotherPrivateKey = generateSecretKey();
+    const anotherPublicKey = getPublicKey(anotherPrivateKey);
+    const anotherSigner = new PrivateKeySigner(bytesToHex(anotherPrivateKey));
+
+    const plaintext = 'Hello Encryption!';
+
+    // Test encryption from signer to another
+    const ciphertext = await signer.nip44!.encrypt(anotherPublicKey, plaintext);
+    expect(typeof ciphertext).toBe('string');
+    expect(ciphertext).not.toBe(plaintext);
+
+    // Test decryption from another signer
+    const decrypted = await anotherSigner.nip44!.decrypt(
+      publicKeyHex,
+      ciphertext,
     );
+    expect(decrypted).toBe(plaintext);
   });
 
   test('getPublicKey() returns the correct public key', async () => {

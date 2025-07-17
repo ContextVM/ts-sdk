@@ -455,11 +455,7 @@ export class NostrServerTransport
       return;
     }
     try {
-      const secretKey = await this.signer.getSecretKey();
-      if (!secretKey) {
-        throw new Error('Server secret key is unavailable for decryption.');
-      }
-      const decryptedJson = decryptMessage(event, secretKey);
+      const decryptedJson = await decryptMessage(event, this.signer);
       const currentEvent = JSON.parse(decryptedJson) as NostrEvent;
       this.authorizeAndProcessEvent(currentEvent, true);
     } catch (error) {
