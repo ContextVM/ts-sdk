@@ -4,16 +4,14 @@ import {
 } from '@modelcontextprotocol/sdk/types.js';
 import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js';
 import {
-  EncryptionMode,
-  NostrSigner,
-  RelayHandler,
-} from '../core/interfaces.js';
-import {
   CTXVM_MESSAGES_KIND,
   GIFT_WRAP_KIND,
   decryptMessage,
 } from '../core/index.js';
-import { BaseNostrTransport, BaseNostrTransportOptions } from './base-nostr-transport.js';
+import {
+  BaseNostrTransport,
+  BaseNostrTransportOptions,
+} from './base-nostr-transport.js';
 import { getNostrEventTag } from '../core/utils/serializers.js';
 import { NostrEvent } from 'nostr-tools';
 

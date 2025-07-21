@@ -39,6 +39,7 @@ This project requires [Bun](https://bun.sh/) (version 1.2.0 or higher).
 git clone https://github.com/ContextVM/ts-sdk.git
 cd ts-sdk
 ```
+
 2. Install dependencies:
 
 ```bash
