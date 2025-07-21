@@ -13,18 +13,15 @@ import {
   GIFT_WRAP_KIND,
   decryptMessage,
 } from '../core/index.js';
-import { BaseNostrTransport } from './base-nostr-transport.js';
+import { BaseNostrTransport, BaseNostrTransportOptions } from './base-nostr-transport.js';
 import { getNostrEventTag } from '../core/utils/serializers.js';
 import { NostrEvent } from 'nostr-tools';
 
 /**
  * Options for configuring the NostrClientTransport.
  */
-export interface NostrTransportOptions {
-  signer: NostrSigner;
-  relayHandler: RelayHandler;
+export interface NostrTransportOptions extends BaseNostrTransportOptions {
   serverPubkey: string;
-  encryptionMode?: EncryptionMode;
 }
 
 /**
