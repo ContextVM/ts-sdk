@@ -4,6 +4,9 @@ import {
   NostrClientTransport,
   NostrTransportOptions,
 } from '../transport/nostr-client-transport.js';
+import { createLogger } from '../core/utils/logger.js';
+
+const logger = createLogger('proxy');
 
 /**
  * Options for configuring the NostrMCPProxy.
@@ -52,7 +55,7 @@ export class NostrMCPProxy {
       this.nostrTransport.start(),
     ]);
 
-    console.log('NostrMCPProxy started.');
+    logger.info('NostrMCPProxy started.');
   }
 
   /**
@@ -63,7 +66,7 @@ export class NostrMCPProxy {
   public async stop(): Promise<void> {
     await this.mcpHostTransport.close();
     await this.nostrTransport.close();
-    console.log('NostrMCPProxy stopped.');
+    logger.info('NostrMCPProxy stopped.');
   }
 
   private setupEventHandlers(): void {
@@ -71,23 +74,23 @@ export class NostrMCPProxy {
     this.mcpHostTransport.onmessage = (message: JSONRPCMessage) => {
       this.nostrTransport
         .send(message)
-        .catch((err) => console.error('Error sending message to Nostr:', err));
+        .catch((err) => logger.error('Error sending message to Nostr:', err));
     };
     this.mcpHostTransport.onerror = (err) =>
-      console.error('MCP Host Transport Error:', err);
+      logger.error('MCP Host Transport Error:', err);
     this.mcpHostTransport.onclose = () =>
-      console.log('MCP Host Transport closed');
+      logger.info('MCP Host Transport closed');
 
     // Forward messages from Nostr back to the local host.
     this.nostrTransport.onmessage = (message: JSONRPCMessage) => {
       this.mcpHostTransport
         .send(message)
         .catch((err) =>
-          console.error('Error sending message to local host:', err),
+          logger.error('Error sending message to local host:', err),
         );
     };
     this.nostrTransport.onerror = (err) =>
-      console.error('Nostr Transport Error:', err);
-    this.nostrTransport.onclose = () => console.log('Nostr Transport closed');
+      logger.error('Nostr Transport Error:', err);
+    this.nostrTransport.onclose = () => logger.info('Nostr Transport closed');
   }
 }

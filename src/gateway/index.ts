@@ -4,6 +4,9 @@ import {
   NostrServerTransport,
   NostrServerTransportOptions,
 } from '../transport/nostr-server-transport.js';
+import { createLogger } from '../core/utils/logger.js';
+
+const logger = createLogger('gateway');
 
 /**
  * Options for configuring the NostrMCPGateway.
@@ -42,7 +45,7 @@ export class NostrMCPGateway {
   private setupEventHandlers(): void {
     // Forward messages from Nostr to the MCP server, handling any potential errors.
     this.nostrServerTransport.onmessage = (message: JSONRPCMessage) => {
-      console.log('Received message from Nostr:', message);
+      logger.debug('Received message from Nostr:', message);
       this.mcpServerTransport
         .send(message)
         .catch(this.handleServerError.bind(this));
@@ -52,7 +55,7 @@ export class NostrMCPGateway {
 
     // Forward messages from the MCP server to the Nostr transport, handling any potential errors.
     this.mcpServerTransport.onmessage = (message: JSONRPCMessage) => {
-      console.log('Received message from MCP server:', message);
+      logger.debug('Received message from MCP server:', message);
       this.nostrServerTransport
         .send(message)
         .catch(this.handleNostrError.bind(this));
@@ -75,9 +78,9 @@ export class NostrMCPGateway {
       await this.nostrServerTransport.start();
 
       this.isRunning = true;
-      console.log('NostrMCPGateway started successfully');
+      logger.info('NostrMCPGateway started successfully');
     } catch (error) {
-      console.error('Failed to start NostrMCPGateway:', error);
+      logger.error('Failed to start NostrMCPGateway:', error);
       await this.stop();
       throw error;
     }
@@ -97,9 +100,9 @@ export class NostrMCPGateway {
       await this.mcpServerTransport.close();
 
       this.isRunning = false;
-      console.log('NostrMCPGateway stopped successfully');
+      logger.info('NostrMCPGateway stopped successfully');
     } catch (error) {
-      console.error('Error stopping NostrMCPGateway:', error);
+      logger.error('Error stopping NostrMCPGateway:', error);
       throw error;
     }
   }
@@ -109,14 +112,14 @@ export class NostrMCPGateway {
    * @param error The error that occurred.
    */
   private handleNostrError(error: Error): void {
-    console.error('Nostr transport error:', error);
+    logger.error('Nostr transport error:', error);
   }
 
   /**
    * Handles the Nostr transport closing.
    */
   private handleNostrClose(): void {
-    console.log('Nostr transport closed');
+    logger.info('Nostr transport closed');
   }
 
   /**
@@ -124,14 +127,14 @@ export class NostrMCPGateway {
    * @param error The error that occurred.
    */
   private handleServerError(error: Error): void {
-    console.error('MCP server transport error:', error);
+    logger.error('MCP server transport error:', error);
   }
 
   /**
    * Handles the MCP server transport closing.
    */
   private handleServerClose(): void {
-    console.log('MCP server transport closed');
+    logger.info('MCP server transport closed');
   }
 
   /**

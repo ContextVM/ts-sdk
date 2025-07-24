@@ -2,6 +2,9 @@ import { SimplePool, type Filter, type NostrEvent } from 'nostr-tools';
 import type { SubCloser } from 'nostr-tools/abstract-pool';
 import { RelayHandler } from '../core/interfaces.js';
 import { sleep } from '../core/utils/utils.js';
+import { createLogger } from '../core/utils/logger.js';
+
+const logger = createLogger('relay');
 
 /**
  * A RelayHandler implementation that uses a SimplePool to manage connections and subscriptions.
@@ -77,7 +80,7 @@ export class SimpleRelayPool implements RelayHandler {
       // Resubscribe to all active subscriptions after successful reconnection
       this.resubscribeAll();
     } catch (error) {
-      console.error(error);
+      logger.error("Can't connect to relay", error);
       // Double the interval for next attempt (exponential backoff), capped at 30 seconds
       const nextInterval = Math.min(currentInterval * 2, 30000);
       this.reconnectIntervals.set(normalizedUrl, nextInterval);

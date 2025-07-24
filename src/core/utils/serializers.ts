@@ -1,6 +1,8 @@
 import type { NostrEvent, UnsignedEvent } from 'nostr-tools';
 import type { JSONRPCMessage } from '@modelcontextprotocol/sdk/types.js';
+import { createLogger } from './logger.js';
 
+const logger = createLogger('serializers');
 /**
  * Serializes an MCP message into a Nostr event object.
  *
@@ -38,7 +40,7 @@ export function nostrEventToMcpMessage(
     const content = JSON.parse(event.content);
     return content;
   } catch (error) {
-    console.error(
+    logger.error(
       `Invalid JSON in Nostr event content: ${error instanceof Error ? error.message : 'Unknown error'}`,
     );
     return null;

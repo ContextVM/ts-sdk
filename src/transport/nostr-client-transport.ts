@@ -14,6 +14,9 @@ import {
 } from './base-nostr-transport.js';
 import { getNostrEventTag } from '../core/utils/serializers.js';
 import { NostrEvent } from 'nostr-tools';
+import { createLogger } from '../core/utils/logger.js';
+
+const logger = createLogger('nostr-client-transport');
 
 /**
  * Options for configuring the NostrClientTransport.
@@ -107,7 +110,7 @@ export class NostrClientTransport
       const mcpMessage = this.convertNostrEventToMcpMessage(nostrEvent);
 
       if (!mcpMessage) {
-        console.error(
+        logger.error(
           'Skipping invalid Nostr event with malformed JSON content',
         );
         return;
@@ -121,7 +124,7 @@ export class NostrClientTransport
         this.handleNotification(mcpMessage);
       }
     } catch (error) {
-      console.error('Error handling incoming Nostr event:', error);
+      logger.error('Error handling incoming Nostr event:', error);
       this.onerror?.(
         error instanceof Error
           ? error
@@ -143,7 +146,7 @@ export class NostrClientTransport
       this.onmessage?.(mcpMessage);
       this.pendingRequestIds.delete(correlatedEventId);
     } else {
-      console.error(
+      logger.error(
         `Received Nostr event with unexpected 'e' tag: ${correlatedEventId}.`,
       );
     }
