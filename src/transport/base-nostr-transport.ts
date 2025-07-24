@@ -18,6 +18,7 @@ import {
   RESOURCETEMPLATES_LIST_KIND,
   PROMPTS_LIST_KIND,
 } from '../core/index.js';
+import { validateMessage, validateMessageSize } from '../core/utils/utils.js';
 
 /**
  * Base options for configuring Nostr-based transports.
@@ -87,12 +88,32 @@ export abstract class BaseNostrTransport {
   }
 
   /**
-   * Converts a Nostr event to an MCP message.
+   * Validates and converts a Nostr event to an MCP message.
    */
   protected convertNostrEventToMcpMessage(
     event: NostrEvent,
   ): JSONRPCMessage | null {
-    return nostrEventToMcpMessage(event);
+    try {
+      const message = nostrEventToMcpMessage(event);
+      if (!message) {
+        return null;
+      }
+
+      // Validate message structure
+      const validatedMessage = validateMessage(message);
+      if (!validatedMessage) {
+        return null;
+      }
+
+      // Validate message size
+      if (!validateMessageSize(event.content)) {
+        return null;
+      }
+
+      return validatedMessage;
+    } catch {
+      return null;
+    }
   }
 
   /**

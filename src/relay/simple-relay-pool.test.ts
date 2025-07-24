@@ -88,4 +88,50 @@ describe('RelayPool Integration', () => {
     relayPool.unsubscribe();
     await relayPool.disconnect();
   }, 10000);
+
+  test('should reconnect to relay after disconnection', async () => {
+    // 1. Setup RelayPool
+    const relayPool = new SimpleRelayPool([relayUrl]);
+    await relayPool.connect();
+
+    // 2. Verify initial connection
+    const normalizedUrl = new URL(relayUrl).href;
+    const initialStatus = relayPool['pool']
+      .listConnectionStatus()
+      .get(normalizedUrl);
+    expect(initialStatus).toBe(true);
+
+    // 3. Kill the relay process
+    relayProcess.kill();
+
+    // 4. Check that connection is lost
+    const disconnectedStatus = relayPool['pool']
+      .listConnectionStatus()
+      .get(relayUrl);
+    // Connection status might be undefined when not connected
+    expect(disconnectedStatus).not.toBe(true);
+
+    // 5. Restart the relay process
+    relayProcess = Bun.spawn(['bun', 'src/__mocks__/mock-relay.ts'], {
+      env: {
+        ...process.env,
+        PORT: `${relayPort}`,
+      },
+    });
+
+    // 6. Wait for relay to restart and reconnection to occur
+    // The exponential backoff starts at 1s, so wait a bit longer
+    await sleep(5100);
+
+    // 7. Verify reconnection
+    const reconnectedNormalizedUrl = new URL(relayUrl).href;
+    const reconnectedStatus = relayPool['pool']
+      .listConnectionStatus()
+      .get(reconnectedNormalizedUrl);
+    expect(reconnectedStatus).toBe(true);
+
+    // 8. Cleanup
+    relayPool.unsubscribe();
+    await relayPool.disconnect();
+  }, 15000);
 });
