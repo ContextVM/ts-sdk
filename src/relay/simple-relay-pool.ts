@@ -12,9 +12,14 @@ import { sleep } from '../core/utils/utils.js';
 export class SimpleRelayPool implements RelayHandler {
   private readonly relayUrls: string[];
   private pool: SimplePool;
-  private subscriptions: SubCloser[] = [];
   private reconnectIntervals: Map<string, number> = new Map();
   private reconnectTimer?: ReturnType<typeof setTimeout>;
+  private subscriptions: Array<{
+    filters: Filter[];
+    onEvent: (event: NostrEvent) => void;
+    onEose?: () => void;
+    closer?: SubCloser;
+  }> = [];
 
   constructor(relayUrls: string[]) {
     this.relayUrls = relayUrls;
@@ -63,17 +68,33 @@ export class SimpleRelayPool implements RelayHandler {
   private async handleDisconnectedRelay(url: string): Promise<void> {
     const normalizedUrl = new URL(url).href;
     const currentInterval = this.reconnectIntervals.get(normalizedUrl) || 1000;
-
+    this.pool['relays'].delete(normalizedUrl);
     try {
       await this.pool.ensureRelay(url, { connectionTimeout: 5000 });
       // Reset backoff interval on successful connection
       this.reconnectIntervals.delete(normalizedUrl);
+
+      // Resubscribe to all active subscriptions after successful reconnection
+      this.resubscribeAll();
     } catch (error) {
       console.error(error);
       // Double the interval for next attempt (exponential backoff), capped at 30 seconds
       const nextInterval = Math.min(currentInterval * 2, 30000);
       this.reconnectIntervals.set(normalizedUrl, nextInterval);
     }
+  }
+
+  /**
+   * Resubscribes to all active subscriptions after relay reconnection
+   */
+  private resubscribeAll(): void {
+    this.subscriptions.forEach((sub) => {
+      if (sub.closer) sub.closer.close();
+      sub.closer = this.pool.subscribeMany(this.relayUrls, sub.filters, {
+        onevent: sub.onEvent,
+        oneose: sub.onEose,
+      });
+    });
   }
 
   async disconnect(relayUrls?: string[]): Promise<void> {
@@ -109,15 +130,15 @@ export class SimpleRelayPool implements RelayHandler {
     onEvent: (event: NostrEvent) => void,
     onEose?: () => void,
   ): Promise<void> {
-    const sub = this.pool.subscribeMany(this.relayUrls, filters, {
+    const closer = this.pool.subscribeMany(this.relayUrls, filters, {
       onevent: onEvent,
       oneose: onEose,
     });
-    this.subscriptions.push(sub);
+    this.subscriptions.push({ filters, onEvent, onEose, closer });
   }
 
   unsubscribe(): void {
-    this.subscriptions.forEach((sub) => sub.close());
+    this.subscriptions.forEach((sub) => sub.closer?.close());
     this.subscriptions = [];
   }
 }

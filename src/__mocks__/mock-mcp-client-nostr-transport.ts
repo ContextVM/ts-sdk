@@ -16,7 +16,7 @@ const transport = new NostrClientTransport({
   signer: new PrivateKeySigner(bytesToHex(generateSecretKey())),
   relayHandler: new SimpleRelayPool(['ws://localhost:10547']),
   serverPubkey:
-    '675ba0e7015d870e8581706f3acb22db74a9ed690f388f64c25459c77a1d1a85',
+    'ada13b4dbc773890a5e8e468b72418b9fffb51c40b78236819a721971b14fed1',
   encryptionMode: EncryptionMode.DISABLED,
 });
 
