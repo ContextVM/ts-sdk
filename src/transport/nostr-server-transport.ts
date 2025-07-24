@@ -14,6 +14,7 @@ import {
   type JSONRPCRequest,
   type JSONRPCResponse,
   isJSONRPCError,
+  JSONRPCNotification,
 } from '@modelcontextprotocol/sdk/types.js';
 import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js';
 import {
@@ -38,6 +39,18 @@ import { createLogger } from '../core/utils/logger.js';
 
 const logger = createLogger('nostr-server-transport');
 
+export interface PricingConfig {
+  price: number;
+  currency?: string;
+}
+
+/**
+ * Configuration for capability pricing with currency support.
+ */
+export interface CapabilityPricingConfig {
+  pricing: Map<string, PricingConfig>;
+}
+
 /**
  * Options for configuring the NostrServerTransport.
  */
@@ -45,6 +58,7 @@ export interface NostrServerTransportOptions extends BaseNostrTransportOptions {
   serverInfo?: ServerInfo;
   isPublicServer?: boolean;
   allowedPublicKeys?: string[];
+  capabilityPricing?: CapabilityPricingConfig;
 }
 
 /**
@@ -84,12 +98,14 @@ export class NostrServerTransport
   private readonly isPublicServer?: boolean;
   private readonly allowedPublicKeys?: string[];
   private readonly serverInfo?: ServerInfo;
+  private readonly capabilityPricing?: CapabilityPricingConfig;
 
   constructor(options: NostrServerTransportOptions) {
     super(options);
     this.serverInfo = options.serverInfo;
     this.isPublicServer = options.isPublicServer;
     this.allowedPublicKeys = options.allowedPublicKeys;
+    this.capabilityPricing = options.capabilityPricing;
   }
 
   /**
@@ -485,6 +501,43 @@ export class NostrServerTransport
   }
 
   /**
+   * Extracts the capability identifier from a JSON-RPC request.
+   * @param request The JSON-RPC request to extract capability from.
+   * @returns The capability identifier or undefined if not applicable.
+   */
+  private extractCapabilityIdentifier(
+    request: JSONRPCRequest,
+  ): string | undefined {
+    const method = request.method;
+
+    // Handle tools/call requests
+    if (method === 'tools/call' && request.params?.name) {
+      return request.params.name as string;
+    }
+
+    // Handle prompts/get requests
+    if (method === 'prompts/get' && request.params?.name) {
+      return request.params.name as string;
+    }
+
+    // Handle resources/read requests - use URI as identifier
+    if (method === 'resources/read' && request.params?.uri) {
+      return request.params.uri as string;
+    }
+
+    // Handle list methods - use the method name itself as identifier
+    if (
+      method.startsWith('tools/') ||
+      method.startsWith('resources/') ||
+      method.startsWith('prompts/')
+    ) {
+      return method;
+    }
+
+    return undefined;
+  }
+
+  /**
    * Common logic for authorizing and processing an event.
    * @param event The event to process.
    * @param isEncrypted Whether the original event was encrypted.
@@ -516,7 +569,33 @@ export class NostrServerTransport
     );
     session.lastActivity = now;
 
+    // Check pricing for requests
     if (isJSONRPCRequest(mcpMessage)) {
+      const capabilityId = this.extractCapabilityIdentifier(mcpMessage);
+
+      if (capabilityId) {
+        const hasPrice = this.hasCapabilityPrice(capabilityId);
+        const price = this.getCapabilityPrice(capabilityId);
+
+        logger.info(
+          `Request for capability '${capabilityId}' from ${event.pubkey}: ` +
+            `hasPrice=${hasPrice}, price=${price ?? 'N/A'}`,
+        );
+
+        // If the capability has a price, send a payment required notification
+        if (hasPrice && price) {
+          const notification: JSONRPCNotification = {
+            jsonrpc: '2.0',
+            method: 'payment_required',
+            params: {
+              price: price.price,
+              currency: price.currency,
+            },
+          };
+          this.sendNotification(event.pubkey, notification, event.id);
+          return;
+        }
+      }
       this.handleIncomingRequest(session, event.id, mcpMessage);
     } else if (isJSONRPCNotification(mcpMessage)) {
       this.handleIncomingNotification(session, mcpMessage);
@@ -545,5 +624,26 @@ export class NostrServerTransport
     }
 
     return keysToDelete.length;
+  }
+
+  /**
+   * Checks if a capability has an associated price.
+   * @param capabilityName The name of the capability to check.
+   * @returns True if the capability has a price, false otherwise.
+   */
+  public hasCapabilityPrice(capabilityName: string): boolean {
+    return (
+      this.capabilityPricing !== undefined &&
+      this.capabilityPricing.pricing.has(capabilityName)
+    );
+  }
+
+  /**
+   * Gets the price for a specific capability.
+   * @param capabilityName The name of the capability.
+   * @returns The price in the configured currency unit, or undefined if no price is set.
+   */
+  public getCapabilityPrice(capabilityName: string): PricingConfig | undefined {
+    return this.capabilityPricing?.pricing.get(capabilityName);
   }
 }
