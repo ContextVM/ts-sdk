@@ -449,7 +449,7 @@ export class NostrServerTransport
    */
   private async handleEncryptedEvent(event: NostrEvent): Promise<void> {
     if (this.encryptionMode === EncryptionMode.DISABLED) {
-      console.warn(
+      console.error(
         `Received encrypted message from ${event.pubkey} but encryption is disabled. Ignoring.`,
       );
       return;
@@ -473,7 +473,7 @@ export class NostrServerTransport
    */
   private handleUnencryptedEvent(event: NostrEvent): void {
     if (this.encryptionMode === EncryptionMode.REQUIRED) {
-      console.warn(
+      console.error(
         `Received unencrypted message from ${event.pubkey} but encryption is required. Ignoring.`,
       );
       return;
@@ -494,11 +494,17 @@ export class NostrServerTransport
       this.allowedPublicKeys?.length &&
       !this.allowedPublicKeys.includes(event.pubkey)
     ) {
-      console.warn(`Unauthorized message from ${event.pubkey}. Ignoring.`);
+      console.error(`Unauthorized message from ${event.pubkey}. Ignoring.`);
       return;
     }
 
     const mcpMessage = this.convertNostrEventToMcpMessage(event);
+
+    if (!mcpMessage) {
+      console.error('Skipping invalid Nostr event with malformed JSON content');
+      return;
+    }
+
     const now = Date.now();
     const session = this.getOrCreateClientSession(
       event.pubkey,

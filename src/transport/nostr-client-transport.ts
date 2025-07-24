@@ -105,6 +105,14 @@ export class NostrClientTransport
 
       // Process the resulting event
       const mcpMessage = this.convertNostrEventToMcpMessage(nostrEvent);
+
+      if (!mcpMessage) {
+        console.error(
+          'Skipping invalid Nostr event with malformed JSON content',
+        );
+        return;
+      }
+
       const eTag = getNostrEventTag(nostrEvent.tags, 'e');
 
       if (eTag) {
@@ -135,7 +143,7 @@ export class NostrClientTransport
       this.onmessage?.(mcpMessage);
       this.pendingRequestIds.delete(correlatedEventId);
     } else {
-      console.warn(
+      console.error(
         `Received Nostr event with unexpected 'e' tag: ${correlatedEventId}.`,
       );
     }

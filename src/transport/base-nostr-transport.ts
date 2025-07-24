@@ -89,7 +89,9 @@ export abstract class BaseNostrTransport {
   /**
    * Converts a Nostr event to an MCP message.
    */
-  protected convertNostrEventToMcpMessage(event: NostrEvent): JSONRPCMessage {
+  protected convertNostrEventToMcpMessage(
+    event: NostrEvent,
+  ): JSONRPCMessage | null {
     return nostrEventToMcpMessage(event);
   }
 
