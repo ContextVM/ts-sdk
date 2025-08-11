@@ -35,7 +35,7 @@ import {
 import { EncryptionMode } from '../core/interfaces.js';
 import { NostrEvent } from 'nostr-tools';
 import { createLogger } from '../core/utils/logger.js';
-import { sleep } from 'bun';
+import { sleep } from '../core/utils/utils.js';
 
 const logger = createLogger('nostr-server-transport');
 
