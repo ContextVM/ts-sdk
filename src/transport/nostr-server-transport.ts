@@ -35,7 +35,6 @@ import {
 import { EncryptionMode } from '../core/interfaces.js';
 import { NostrEvent } from 'nostr-tools';
 import { createLogger } from '../core/utils/logger.js';
-import { sleep } from '../core/utils/utils.js';
 
 const logger = createLogger('nostr-server-transport');
 
@@ -166,6 +165,7 @@ export class NostrServerTransport
    * This method now properly handles the initialization handshake by first sending
    * the initialize request, waiting for the response, and then proceeding with other announcements.
    */
+
   private async getAnnouncementData(): Promise<void> {
     const initializeParams: InitializeRequest['params'] = {
       protocolVersion: LATEST_PROTOCOL_VERSION,
@@ -176,7 +176,7 @@ export class NostrServerTransport
       },
     };
 
-    // First, send the initialize request and wait for completion
+    // Send the initialize request if not already initialized
     if (!this.isInitialized) {
       const initializeMessage: JSONRPCMessage = {
         jsonrpc: '2.0',
@@ -187,26 +187,51 @@ export class NostrServerTransport
 
       logger.info('Sending initialize request for announcement');
       this.onmessage?.(initializeMessage);
+    }
 
-      let attempts = 0;
+    try {
+      // Wait for initialization to complete
+      await this.waitForInitialization();
 
-      while (!this.isInitialized && attempts < 10) {
-        attempts++;
-        await sleep(50);
+      // Send all announcements now that we're initialized
+      for (const [key, methodValue] of Object.entries(announcementMethods)) {
+        logger.info('Sending announcement', { key, methodValue });
+        const message: JSONRPCMessage = {
+          jsonrpc: '2.0',
+          id: 'announcement',
+          method: methodValue,
+          params: key === 'server' ? initializeParams : {},
+        };
+        this.onmessage?.(message);
       }
+    } catch (error) {
+      logger.warn(
+        'Server not initialized after waiting, skipping announcements',
+        { error: error instanceof Error ? error.message : error },
+      );
     }
+  }
 
-    // Now send all other announcements
-    for (const [key, methodValue] of Object.entries(announcementMethods)) {
-      logger.info('Sending announcement', { key, methodValue });
-      const message: JSONRPCMessage = {
-        jsonrpc: '2.0',
-        id: 'announcement',
-        method: methodValue,
-        params: key === 'server' ? initializeParams : {},
+  /**
+   * Waits for the server to be initialized with a timeout.
+   * @returns Promise that resolves when initialized or rejects on timeout.
+   */
+  private async waitForInitialization(): Promise<void> {
+    return new Promise((resolve, reject) => {
+      let attempts = 0;
+      const checkInterval = () => {
+        attempts++;
+        if (this.isInitialized) {
+          resolve();
+        } else if (attempts >= 10) {
+          reject();
+          logger.error('Server initialization timed out');
+        } else {
+          setTimeout(checkInterval, 50);
+        }
       };
-      this.onmessage?.(message);
-    }
+      checkInterval();
+    });
   }
 
   /**
