@@ -185,7 +185,7 @@ export class NostrServerTransport
         params: initializeParams,
       };
 
-      console.error('Sending initialize request for announcement');
+      logger.info('Sending initialize request for announcement');
       this.onmessage?.(initializeMessage);
 
       let attempts = 0;
@@ -198,7 +198,7 @@ export class NostrServerTransport
 
     // Now send all other announcements
     for (const [key, methodValue] of Object.entries(announcementMethods)) {
-      console.error('Sending announcement', key, methodValue);
+      logger.info('Sending announcement', { key, methodValue });
       const message: JSONRPCMessage = {
         jsonrpc: '2.0',
         id: 'announcement',
@@ -338,6 +338,7 @@ export class NostrServerTransport
             method: 'notifications/initialized',
           };
           this.onmessage?.(initializedNotification);
+          logger.info('Initialized');
         }
         await this.announcer(response);
       }
