@@ -35,6 +35,7 @@ import {
 import { EncryptionMode } from '../core/interfaces.js';
 import { NostrEvent } from 'nostr-tools';
 import { createLogger } from '../core/utils/logger.js';
+import { sleep } from 'bun';
 
 const logger = createLogger('nostr-server-transport');
 
@@ -85,6 +86,7 @@ export class NostrServerTransport
   private readonly isPublicServer?: boolean;
   private readonly allowedPublicKeys?: string[];
   private readonly serverInfo?: ServerInfo;
+  private isInitialized = false;
 
   constructor(options: NostrServerTransportOptions) {
     super(options);
@@ -130,7 +132,7 @@ export class NostrServerTransport
     await this.subscribe(filters, this.processIncomingEvent.bind(this));
 
     if (this.isPublicServer) {
-      this.getAnnouncementData();
+      await this.getAnnouncementData();
     }
   }
 
@@ -161,8 +163,10 @@ export class NostrServerTransport
 
   /**
    * Initiates the process of fetching announcement data from the server's internal logic.
+   * This method now properly handles the initialization handshake by first sending
+   * the initialize request, waiting for the response, and then proceeding with other announcements.
    */
-  private getAnnouncementData(): void {
+  private async getAnnouncementData(): Promise<void> {
     const initializeParams: InitializeRequest['params'] = {
       protocolVersion: LATEST_PROTOCOL_VERSION,
       capabilities: {},
@@ -172,14 +176,35 @@ export class NostrServerTransport
       },
     };
 
+    // First, send the initialize request and wait for completion
+    if (!this.isInitialized) {
+      const initializeMessage: JSONRPCMessage = {
+        jsonrpc: '2.0',
+        id: 'announcement',
+        method: 'initialize',
+        params: initializeParams,
+      };
+
+      console.error('Sending initialize request for announcement');
+      this.onmessage?.(initializeMessage);
+
+      let attempts = 0;
+
+      while (!this.isInitialized && attempts < 10) {
+        attempts++;
+        await sleep(50);
+      }
+    }
+
+    // Now send all other announcements
     for (const [key, methodValue] of Object.entries(announcementMethods)) {
+      console.error('Sending announcement', key, methodValue);
       const message: JSONRPCMessage = {
         jsonrpc: '2.0',
         id: 'announcement',
         method: methodValue,
         params: key === 'server' ? initializeParams : {},
       };
-
       this.onmessage?.(message);
     }
   }
@@ -304,6 +329,16 @@ export class NostrServerTransport
     // Handle special announcement responses
     if (response.id === 'announcement') {
       if (isJSONRPCResponse(response)) {
+        if (InitializeResultSchema.safeParse(response.result).success) {
+          this.isInitialized = true;
+
+          // Send the initialized notification
+          const initializedNotification: JSONRPCMessage = {
+            jsonrpc: '2.0',
+            method: 'notifications/initialized',
+          };
+          this.onmessage?.(initializedNotification);
+        }
         await this.announcer(response);
       }
       return;
