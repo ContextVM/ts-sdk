@@ -214,24 +214,23 @@ export class NostrServerTransport
 
   /**
    * Waits for the server to be initialized with a timeout.
-   * @returns Promise that resolves when initialized or rejects on timeout.
+   * @returns Promise that resolves when initialized or after 10-second timeout.
+   * The method will always resolve, allowing announcements to proceed.
    */
   private async waitForInitialization(): Promise<void> {
-    return new Promise((resolve, reject) => {
-      let attempts = 0;
-      const checkInterval = () => {
-        attempts++;
-        if (this.isInitialized) {
-          resolve();
-        } else if (attempts >= 10) {
-          reject();
-          logger.error('Server initialization timed out');
-        } else {
-          setTimeout(checkInterval, 50);
-        }
-      };
-      checkInterval();
-    });
+    const startTime = Date.now();
+    const timeoutMs = 10000; // 10 seconds timeout
+
+    while (!this.isInitialized && Date.now() - startTime < timeoutMs) {
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+
+    // Log warning if not initialized but don't throw error
+    if (!this.isInitialized) {
+      logger.warn(
+        'Server initialization not completed within timeout, proceeding with announcements',
+      );
+    }
   }
 
   /**
